@@ -17,7 +17,6 @@ import java.util.List;
 @RequiredArgsConstructor
 public class LivestockServiceImpl implements LivestockService {
     private final LivestockRepository repo;
-    private final LivestockMapper livestockMapper;
 
     // CREATE - save Livestock
     @Override
@@ -41,7 +40,7 @@ public class LivestockServiceImpl implements LivestockService {
     @Override
     public LivestockResponse getById(Long id){
         Livestock entity = repo.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Livestock not found with id " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("Livestock", "id", id));
         return LivestockMapper.toResponse(entity);
     }
 
@@ -49,7 +48,7 @@ public class LivestockServiceImpl implements LivestockService {
     @Override
     public LivestockResponse update(Long id,  LivestockRequest request, String updatedBy){
         Livestock entity = repo.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Livestock not found with ID " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("Livestock", "id", id));
 
         // Update fields from request
         entity.setBatchName(request.getBatchName());
@@ -69,8 +68,8 @@ public class LivestockServiceImpl implements LivestockService {
     @Override
     public void delete(Long id){
         if(!repo.existsById(id)){
-            throw new EntityNotFoundException("Livestock not found with ID " + id);
+            throw new ResourceNotFoundException("Livestock", "id", id);
         }
-        //return repo.deleteById(id);
+        repo.deleteById(id);
     }
 }

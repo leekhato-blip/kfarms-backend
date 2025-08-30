@@ -34,7 +34,7 @@ public class SecurityConfig {
                 .cors(Customizer.withDefaults())
                 .csrf(csrf -> csrf.disable()) // Disable CSRF for now (especially useful for APIs)
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/login", "/api/signup").permitAll()
+                        .requestMatchers("/api/login", "/api/signup").permitAll() // Public endpoints
 
                         // DELETE — only ADMIN can delete anything
                         .requestMatchers(HttpMethod.DELETE, "/api/**").hasRole("ADMIN")
@@ -44,7 +44,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.PUT, "/api/**").hasRole("ADMIN")
 
                         // GET — any authenticated user (USER or ADMIN)
-                        .requestMatchers(HttpMethod.GET, "/api/**").hasAnyRole("USER", "ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/**").hasAnyRole("USER", "ADMIN", "SUPERVISOR")
 
                         // Everything else requires login
                         .anyRequest().authenticated()

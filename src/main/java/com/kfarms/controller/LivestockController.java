@@ -3,31 +3,74 @@ package com.kfarms.controller;
 import com.kfarms.dto.LivestockRequest;
 import com.kfarms.dto.LivestockResponse;
 import com.kfarms.entity.ApiResponse;
-import com.kfarms.entity.Livestock;
-import com.kfarms.mapper.LivestockMapper;
 import com.kfarms.service.LivestockService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.util.StringUtils;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/livestock")
 @RequiredArgsConstructor
+@Validated
 public class LivestockController {
     private final LivestockService service;
 
+    // CREATE - add new livestock
     @PostMapping
-    public ResponseEntity<ApiResponse<LivestockResponse>> save(
+    public ResponseEntity<ApiResponse<LivestockResponse>> create(
             @RequestBody LivestockRequest request,
-            @RequestHeader(value = "X-user", defaultValue = "System") String createdBy
+            @RequestHeader("X-USER") String createdBy
     ){
+        LivestockResponse response = service.create(request, createdBy);
         return ResponseEntity.ok(
-                new ApiResponse<>(true, "Livestock saved successfully", request)
+                new ApiResponse<>(true, "Livestock saved successfully", response)
         );
+    }
+
+    // READ - all livestock
+    @GetMapping
+    public ResponseEntity<ApiResponse<List<LivestockResponse>>> getAll(){
+        List<LivestockResponse> responses = service.getAll();
+        return ResponseEntity.ok(
+                new ApiResponse<>(true, "All livestock fetched successfully", responses)
+        );
+    }
+
+    // READ - get livestock by ID
+    @GetMapping("/{id}")
+    public ResponseEntity<ApiResponse<LivestockResponse>> getById(@PathVariable Long id){
+        LivestockResponse response = service.getById(id);
+        if(response != null){
+            return ResponseEntity.ok(
+                    new ApiResponse<>(true, "Livestock fetched", response)
+            );
+        } else {
+            return ResponseEntity.notFound().build();
+        }
+    }
+
+    // UPDATE - update existing livestock
+    @PutMapping("/{id}")
+    public ResponseEntity<ApiResponse<LivestockResponse>> update(
+            @PathVariable Long id,
+            @RequestBody LivestockRequest request,
+            @RequestHeader("X-USER") String updatedBy
+    ){
+        LivestockResponse response = service.update(id, request, updatedBy);
+        return ResponseEntity.ok(
+                new ApiResponse<>(true, "Livestock updated successfully", response)
+        );
+    }
+
+    // DELETE - delete livestock by ID
+    @DeleteMapping("/{id}")
+    public ResponseEntity<ApiResponse<String>> delete(@PathVariable Long id){
+        service.delete(id);
+        return ResponseEntity.ok(
+                new ApiResponse<>(true, "Livestock with ID " + id + " deleted successfully", null
+                ));
     }
 }

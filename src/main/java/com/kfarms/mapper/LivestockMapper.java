@@ -11,10 +11,10 @@ public class LivestockMapper {
         entity.setBatchName(dto.getBatchName());
         entity.setQuantity(dto.getQuantity());
         entity.setType(dto.getType());
+        entity.setMortality(dto.getMortality() != null ? dto.getMortality() : 0 );
         entity.setArrivalDate(dto.getArrivalDate());
         entity.setSourceType(dto.getSourceType());
 
-        // defaults/safety
         int starting = (dto.getSourceType() == SourceType.FARM_BIRTH) ? 0 :
                 (dto.getStartingAgeInWeeks() != null ? Math.max(0, dto.getStartingAgeInWeeks()) : 0);
         entity.setStartingAgeInWeeks(starting);

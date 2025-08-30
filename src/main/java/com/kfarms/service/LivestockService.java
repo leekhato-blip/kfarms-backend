@@ -2,7 +2,6 @@ package com.kfarms.service;
 
 import com.kfarms.dto.LivestockRequest;
 import com.kfarms.dto.LivestockResponse;
-import com.kfarms.entity.Livestock;
 
 import java.util.List;
 

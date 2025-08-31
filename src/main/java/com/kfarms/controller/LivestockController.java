@@ -4,8 +4,10 @@ import com.kfarms.dto.LivestockRequest;
 import com.kfarms.dto.LivestockResponse;
 import com.kfarms.entity.ApiResponse;
 import com.kfarms.service.LivestockService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
@@ -19,9 +21,10 @@ public class LivestockController {
     private final LivestockService service;
 
     // CREATE - add new livestock
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping
     public ResponseEntity<ApiResponse<LivestockResponse>> create(
-            @RequestBody LivestockRequest request,
+            @Valid @RequestBody LivestockRequest request,
             @RequestHeader("X-USER") String createdBy
     ){
         LivestockResponse response = service.create(request, createdBy);
@@ -31,6 +34,7 @@ public class LivestockController {
     }
 
     // READ - all livestock
+    @PreAuthorize("hasAnyRole('USER', 'ADMIN', 'SUPERVISOR')")
     @GetMapping
     public ResponseEntity<ApiResponse<List<LivestockResponse>>> getAll(){
         List<LivestockResponse> responses = service.getAll();
@@ -40,6 +44,7 @@ public class LivestockController {
     }
 
     // READ - get livestock by ID
+    @PreAuthorize("hasAnyRole('USER', 'ADMIN', 'SUPERVISOR')")
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<LivestockResponse>> getById(@PathVariable Long id){
         LivestockResponse response = service.getById(id);
@@ -53,6 +58,7 @@ public class LivestockController {
     }
 
     // UPDATE - update existing livestock
+    @PreAuthorize("hasRole('ADMIN')")
     @PutMapping("/{id}")
     public ResponseEntity<ApiResponse<LivestockResponse>> update(
             @PathVariable Long id,
@@ -66,6 +72,7 @@ public class LivestockController {
     }
 
     // DELETE - delete livestock by ID
+    @PreAuthorize("hasRole('ADMIN')")
     @DeleteMapping("/{id}")
     public ResponseEntity<ApiResponse<String>> delete(@PathVariable Long id){
         service.delete(id);

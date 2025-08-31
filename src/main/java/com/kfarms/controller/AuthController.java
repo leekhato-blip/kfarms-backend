@@ -1,6 +1,7 @@
 package com.kfarms.controller;
 
 import com.kfarms.dto.LoginResponse;
+import com.kfarms.entity.ApiResponse;
 import com.kfarms.entity.AppUser;
 import com.kfarms.repository.UserRepository;
 import com.kfarms.security.JwtService;
@@ -17,7 +18,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api") // All routes under /api/auth
+@RequestMapping("/api/auth") // All routes under /api/auth
 public class AuthController {
     private final JwtService jwtService;
     private final UserRepository userRepo;
@@ -25,7 +26,10 @@ public class AuthController {
     private final AuthenticationManager authManager;
 
     // Inject UserRepository and PasswordEncoder through constructor
-    public AuthController(UserRepository userRepo, PasswordEncoder passwordEncoder, AuthenticationManager authManager, JwtService jwtService){
+    public AuthController(UserRepository userRepo,
+                          PasswordEncoder passwordEncoder,
+                          AuthenticationManager authManager,
+                          JwtService jwtService) {
         this.userRepo = userRepo;
         this.passwordEncoder = passwordEncoder;
         this.authManager = authManager;
@@ -35,27 +39,28 @@ public class AuthController {
 
     // === REGISTER NEW USER === //
     @PostMapping("/signup")
-    public ResponseEntity<String> signup(@RequestBody AppUser user){
+    public ResponseEntity<ApiResponse<String>> signup(@RequestBody AppUser user){
         // Check if username already exists
         if(userRepo.findByUsername(user.getUsername()).isPresent()){
-            return ResponseEntity.badRequest().body("Username already taken.");
+            return ResponseEntity.badRequest()
+                    .body(new ApiResponse<>(false, "Username already taken", null));
         }
 
         // Encode the password using BCrypt
         user.setPassword(passwordEncoder.encode(user.getPassword()));
-
-        // Set a default role (can be changed as needed)
-        user.setRole("ADMIN");
+        user.setRole("USER"); // default role
 
         // Save the new user in the database
         userRepo.save(user);
 
-        return ResponseEntity.ok("User Registered Successfully");
+        return ResponseEntity.ok(
+                new ApiResponse<>(true, "User registered successfully", null)
+        );
     }
 
     // == Login Existing User == //
     @PostMapping("/login")
-    public ResponseEntity<String> login(@RequestBody AppUser loginRequest){
+    public ResponseEntity<ApiResponse<LoginResponse>> login(@RequestBody AppUser loginRequest){
         try{
             Authentication auth = authManager.authenticate(
                     new UsernamePasswordAuthenticationToken(
@@ -67,9 +72,17 @@ public class AuthController {
             SecurityContextHolder.getContext().setAuthentication(auth);
             String username = auth.getName();
             String jwt = jwtService.generateToken(username);
-            return ResponseEntity.ok("Login Successful" + new LoginResponse(jwt, loginRequest.getUsername()));
+
+            return ResponseEntity.ok(
+                    new ApiResponse<>(
+                            true,
+                            "Login Successful",
+                            new LoginResponse(jwt, username)
+                    )
+            );
         }     catch (AuthenticationException e){
-            return ResponseEntity.status(401).body("Invalid credentials");
+            return ResponseEntity.status(401)
+                    .body(new ApiResponse<>(false, "Invalid credentials", null));
         }
     }
 }

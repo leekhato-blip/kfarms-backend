@@ -18,7 +18,7 @@ public class LivestockResponse {
     private SourceType sourceType;
     private int startingAgeInWeeks;
     private int ageInWeeks; // derived, not stored
-    private int mortality;
+    private Integer mortality;
 
     private String notes;
 

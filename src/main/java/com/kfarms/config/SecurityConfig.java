@@ -37,7 +37,7 @@ public class SecurityConfig {
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         // Public auth endpoints (POST only)
-                        .requestMatchers("/api/login", "/api/signup").permitAll() // Public endpoints
+                        .requestMatchers("/api/auth/login", "/api/auth/signup").permitAll() // Public endpoints
 
                         // DELETE — only ADMIN can delete anything
                         .requestMatchers(HttpMethod.DELETE, "/api/**").hasRole("ADMIN")

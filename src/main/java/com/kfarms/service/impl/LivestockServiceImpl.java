@@ -11,7 +11,11 @@ import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -65,6 +69,7 @@ public class LivestockServiceImpl implements LivestockService {
         return LivestockMapper.toResponse(entity);
     }
 
+    // DELETE - delete livestock by ID
     @Override
     public void delete(Long id){
         if(!repo.existsById(id)){
@@ -72,4 +77,43 @@ public class LivestockServiceImpl implements LivestockService {
         }
         repo.deleteById(id);
     }
+
+    // SEARCH
+    @Override
+    public List<LivestockResponse> search(String batchName, String type, LocalDate arrivalDate){
+        List<Livestock> list = repo.findAll(); // start with all
+        if(batchName != null && !batchName.isEmpty()){
+            list = list.stream()
+                    .filter(l -> l.getBatchName().toLowerCase().contains(batchName.toLowerCase()))
+                    .toList();
+        }
+        if(type != null && !type.isEmpty()){
+            list = list.stream()
+                    .filter(l -> l.getType().name().equalsIgnoreCase(type))
+                    .toList();
+        }
+        if(arrivalDate != null){
+            list = list.stream()
+                    .filter(l -> arrivalDate.equals(l.getArrivalDate()))
+                    .toList();
+        }
+        return list.stream().map(LivestockMapper::toResponse).toList();
+    }
+
+    // SUMMARY
+    @Override
+    public Map<String, Object> getSummary(){
+        List<Livestock> all = repo.findAll();
+        Map<String, Object> summary = new HashMap<>();
+        summary.put("totalLivestock", all.size());
+        summary.put("totalMortality", all.stream().mapToInt(l -> l.getMortality() != null ? l.getMortality() : 0).sum());
+
+        // count by type
+        Map<String, Long> countByType = all.stream()
+                .collect(Collectors.groupingBy(l -> l.getType().name(), Collectors.counting()));
+        summary.put("countByType", countByType);
+
+        return summary;
+    }
+
 }

@@ -11,10 +11,13 @@ public class LivestockMapper {
         entity.setBatchName(dto.getBatchName());
         entity.setQuantity(dto.getQuantity());
         entity.setType(dto.getType());
+        entity.setNotes(dto.getNotes());
+        // Default mortality to 0 if not provided
         entity.setMortality(dto.getMortality() != null ? dto.getMortality() : 0 );
         entity.setArrivalDate(dto.getArrivalDate());
         entity.setSourceType(dto.getSourceType());
 
+        // Starting age: 0 for FARM_BIRTH, else use provided value or 0
         int starting = (dto.getSourceType() == SourceType.FARM_BIRTH) ? 0 :
                 (dto.getStartingAgeInWeeks() != null ? Math.max(0, dto.getStartingAgeInWeeks()) : 0);
         entity.setStartingAgeInWeeks(starting);
@@ -33,8 +36,9 @@ public class LivestockMapper {
         response.setStartingAgeInWeeks(entity.getStartingAgeInWeeks());
         response.setAgeInWeeks(entity.getAgeInWeeks()); // derived
         response.setMortality(entity.getMortality());
-
         response.setNotes(entity.getNotes());
+
+        // audit
         response.setCreatedBy(entity.getCreatedBy());
         response.setUpdatedBy(entity.getUpdatedBy());
         response.setCreatedAt(entity.getCreatedAt());

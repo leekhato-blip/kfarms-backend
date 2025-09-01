@@ -16,8 +16,6 @@ public class LayerMapper {
         dto.setUpdatedBy(entity.getUpdatedBy());
         dto.setCreatedAt(entity.getCreatedAt());
         dto.setUpdatedAt(entity.getUpdatedAt());
-
-
         return dto;
     }
 

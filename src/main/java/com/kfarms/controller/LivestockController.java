@@ -1,17 +1,27 @@
 package com.kfarms.controller;
 
+import com.fasterxml.jackson.core.ObjectCodec;
 import com.kfarms.dto.LivestockRequest;
 import com.kfarms.dto.LivestockResponse;
 import com.kfarms.entity.ApiResponse;
 import com.kfarms.service.LivestockService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.apache.coyote.Response;
+import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
+import java.net.Authenticator;
+import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/livestock")
@@ -24,9 +34,11 @@ public class LivestockController {
     @PreAuthorize("hasRole('ADMIN')")
     @PostMapping
     public ResponseEntity<ApiResponse<LivestockResponse>> create(
-            @Valid @RequestBody LivestockRequest request,
-            @RequestHeader("X-USER") String createdBy
+            @Valid @RequestBody LivestockRequest request
     ){
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String createdBy = auth.getName();
+
         LivestockResponse response = service.create(request, createdBy);
         return ResponseEntity.ok(
                 new ApiResponse<>(true, "Livestock saved successfully", response)
@@ -53,7 +65,8 @@ public class LivestockController {
                     new ApiResponse<>(true, "Livestock fetched", response)
             );
         } else {
-            return ResponseEntity.notFound().build();
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(new ApiResponse<>(false, "Livestock with ID: " + id + " not found", null));
         }
     }
 
@@ -62,9 +75,10 @@ public class LivestockController {
     @PutMapping("/{id}")
     public ResponseEntity<ApiResponse<LivestockResponse>> update(
             @PathVariable Long id,
-            @RequestBody LivestockRequest request,
-            @RequestHeader("X-USER") String updatedBy
+            @RequestBody LivestockRequest request
     ){
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String updatedBy = auth.getName();
         LivestockResponse response = service.update(id, request, updatedBy);
         return ResponseEntity.ok(
                 new ApiResponse<>(true, "Livestock updated successfully", response)
@@ -77,7 +91,31 @@ public class LivestockController {
     public ResponseEntity<ApiResponse<String>> delete(@PathVariable Long id){
         service.delete(id);
         return ResponseEntity.ok(
-                new ApiResponse<>(true, "Livestock with ID " + id + " deleted successfully", null
+                new ApiResponse<>(true, "Livestock with ID: " + id + " deleted successfully", null
                 ));
+    }
+
+    // SEARCH / FILTER
+    @PreAuthorize("hasAnyRole('ADMIN', 'USER', 'SUPERVISOR')")
+    @GetMapping("/search")
+    public ResponseEntity<ApiResponse<List<LivestockResponse>>> search(
+            @RequestParam(required = false) String batchName,
+            @RequestParam(required = false) String type,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate arrivalDate
+    ){
+        List<LivestockResponse> results = service.search(batchName, type, arrivalDate);
+        return ResponseEntity.ok(
+                new ApiResponse<>(true, "Search results fetched successfully", results)
+        );
+    }
+
+    // DASHBOARD SUMMARY
+    @PreAuthorize("hasAnyRole('ADMIN', 'USER', 'SUPERVISOR')")
+    @GetMapping("/summary")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> summary(){
+        Map<String, Object> summary = service.getSummary();
+        return ResponseEntity.ok(
+                new ApiResponse<>(true, "Livestock summary fetched successfully", summary)
+        );
     }
 }

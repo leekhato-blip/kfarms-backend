@@ -1,11 +1,8 @@
 package com.kfarms.controller;
 
-import com.kfarms.dto.EggDto;
 import com.kfarms.dto.FeedDto;
 import com.kfarms.entity.ApiResponse;
-import com.kfarms.entity.Egg;
 import com.kfarms.entity.Feed;
-import com.kfarms.mapper.EggMapper;
 import com.kfarms.mapper.FeedMapper;
 import com.kfarms.service.FeedService;
 import org.springframework.http.HttpStatus;

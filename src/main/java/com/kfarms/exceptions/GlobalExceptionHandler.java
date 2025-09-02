@@ -2,12 +2,14 @@ package com.kfarms.exceptions;
 
 import com.kfarms.entity.ApiResponse;
 import jakarta.persistence.EntityNotFoundException;
+import jdk.dynalink.linker.MethodHandleTransformer;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.nio.file.AccessDeniedException;
 
@@ -56,9 +58,29 @@ public class GlobalExceptionHandler  {
                 .body(new ApiResponse<>(false, "An unexpected error occured: " + ex.getMessage(), null));
     }
 
+    // Resource not found
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ApiResponse<String>> handleResourceNotFound(ResourceNotFoundException ex){
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(new ApiResponse<>(false, ex.getMessage(), null));
+    }
+
+    // Bad Request - invalid arguments (live type conversion)
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ApiResponse<String>> handleIllegalArgument(IllegalArgumentException ex){
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(false, ex.getMessage(), null));
+    }
+
+    // Type Mismatch
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiResponse<String>> handleTypeMismatch(MethodArgumentTypeMismatchException ex){
+        String message = String.format("Invalid value '%s' for parameter '%s'. Expected type: %s",
+                ex.getMessage(),
+                ex.getName(),
+                ex.getRequiredType() !=null ? ex.getRequiredType().getSimpleName() : "unknown");
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(false, message, null));
     }
 }

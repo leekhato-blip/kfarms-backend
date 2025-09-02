@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.net.Authenticator;
 import java.time.LocalDate;
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 
@@ -48,12 +49,26 @@ public class LivestockController {
     // READ - all livestock
     @PreAuthorize("hasAnyRole('USER', 'ADMIN', 'SUPERVISOR')")
     @GetMapping
-    public ResponseEntity<ApiResponse<List<LivestockResponse>>> getAll(){
-        List<LivestockResponse> responses = service.getAll();
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getAll(
+        @RequestParam(defaultValue = "0") int page,
+        @RequestParam(defaultValue = "10") int size,
+        @RequestParam(required = false) String batchName,
+        @RequestParam(required = false) String type,
+        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate arrivalDate
+
+    ){
+        Map<String, Object> response = service.getAll(page, size, batchName, type, arrivalDate);
         return ResponseEntity.ok(
-                new ApiResponse<>(true, "All livestock fetched successfully", responses)
+                new ApiResponse<>(true, "Livestock fetched successfully", response)
         );
     }
+
+//    public ResponseEntity<ApiResponse<List<LivestockResponse>>> getAll(){
+//        List<LivestockResponse> responses = service.getAll();
+//        return ResponseEntity.ok(
+//                new ApiResponse<>(true, "All livestock fetched successfully", responses)
+//        );
+//    }
 
     // READ - get livestock by ID
     @PreAuthorize("hasAnyRole('USER', 'ADMIN', 'SUPERVISOR')")
@@ -96,13 +111,16 @@ public class LivestockController {
     }
 
     // SEARCH / FILTER
-    @PreAuthorize("hasAnyRole('ADMIN', 'USER', 'SUPERVISOR')")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('USER') or hasRole('SUPERVISOR')")
     @GetMapping("/search")
     public ResponseEntity<ApiResponse<List<LivestockResponse>>> search(
             @RequestParam(required = false) String batchName,
             @RequestParam(required = false) String type,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate arrivalDate
     ){
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        System.out.println("Logged in as: " + auth.getName());
+        System.out.println("Authorities: " + auth.getAuthorities());
         List<LivestockResponse> results = service.search(batchName, type, arrivalDate);
         return ResponseEntity.ok(
                 new ApiResponse<>(true, "Search results fetched successfully", results)
@@ -110,7 +128,7 @@ public class LivestockController {
     }
 
     // DASHBOARD SUMMARY
-    @PreAuthorize("hasAnyRole('ADMIN', 'USER', 'SUPERVISOR')")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('USER') or hasRole('SUPERVISOR')")
     @GetMapping("/summary")
     public ResponseEntity<ApiResponse<Map<String, Object>>> summary(){
         Map<String, Object> summary = service.getSummary();

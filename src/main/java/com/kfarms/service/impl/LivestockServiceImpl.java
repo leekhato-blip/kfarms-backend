@@ -3,15 +3,22 @@ package com.kfarms.service.impl;
 import com.kfarms.dto.LivestockRequest;
 import com.kfarms.dto.LivestockResponse;
 import com.kfarms.entity.Livestock;
+import com.kfarms.entity.LivestockType;
 import com.kfarms.exceptions.ResourceNotFoundException;
 import com.kfarms.mapper.LivestockMapper;
 import com.kfarms.repository.LivestockRepository;
 import com.kfarms.service.LivestockService;
-import jakarta.persistence.EntityNotFoundException;
+import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -31,13 +38,58 @@ public class LivestockServiceImpl implements LivestockService {
         return LivestockMapper.toResponse(entity);
     }
 
-    // READ - get all Livestock
+    // READ - get all Livestock (Pagination and Filtering)
     @Override
-    public List<LivestockResponse> getAll(){
-        return repo.findAll()
+    public Map<String, Object> getAll(int page, int size, String batchName, String type, LocalDate arrivalDate){
+        Pageable pageable = PageRequest.of(page, size, Sort.by("id").descending());
+
+        // Convert type string to enum(if provided)
+        LivestockType typeEnum = null;
+        if(type != null && !type.isBlank()){
+            try{
+                typeEnum = LivestockType.valueOf(type.toUpperCase());
+            } catch (IllegalArgumentException ex){
+                throw new IllegalArgumentException("Invalid livestock type: " + type);
+            }
+        }
+        final String batchNameFinal = batchName;
+        final LivestockType typeEnumFinal = typeEnum;
+        final LocalDate arrivalDateFinal = arrivalDate;
+
+
+        Specification<Livestock> spec = (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            if (batchName != null && !batchName.isBlank()) {
+                // use lower on expression and lowercase the param for case-insensitive search
+                predicates.add(cb.like(cb.lower(root.get("batchName")), "%" + batchName.toLowerCase() + "%"));
+            }
+            if (typeEnumFinal != null) {
+                predicates.add(cb.equal(root.get("type"), typeEnumFinal));
+            }
+            if (arrivalDate != null) {
+                predicates.add(cb.equal(root.get("arrivalDate"), arrivalDate));
+            }
+
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
+        Page<Livestock> livestockPage = repo.findAll(spec, pageable);
+
+        List<LivestockResponse> items = livestockPage.getContent()
                 .stream()
                 .map(LivestockMapper::toResponse)
                 .toList();
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("items", items);
+        result.put("page", livestockPage.getNumber());
+        result.put("size", livestockPage.getSize());
+        result.put("totalItems", livestockPage.getTotalElements());
+        result.put("totalPages", livestockPage.getTotalPages());
+        result.put("hasNext", livestockPage.hasNext());
+        result.put("hasPrevious", livestockPage.hasPrevious());
+
+        return result;
+
     }
 
     // READ - get Livestock by ID

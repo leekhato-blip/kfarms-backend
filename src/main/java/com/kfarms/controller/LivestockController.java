@@ -63,13 +63,6 @@ public class LivestockController {
         );
     }
 
-//    public ResponseEntity<ApiResponse<List<LivestockResponse>>> getAll(){
-//        List<LivestockResponse> responses = service.getAll();
-//        return ResponseEntity.ok(
-//                new ApiResponse<>(true, "All livestock fetched successfully", responses)
-//        );
-//    }
-
     // READ - get livestock by ID
     @PreAuthorize("hasAnyRole('USER', 'ADMIN', 'SUPERVISOR')")
     @GetMapping("/{id}")

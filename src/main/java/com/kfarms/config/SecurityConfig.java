@@ -17,6 +17,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import org.springframework.web.servlet.handler.HandlerMappingIntrospector;
 
 import java.util.List;
 
@@ -42,11 +43,11 @@ public class SecurityConfig {
                         // DELETE — only ADMIN can delete anything
                         .requestMatchers(HttpMethod.DELETE, "/api/**").hasRole("ADMIN")
 
-                        // POST and PUT — ADMIN only (create/update across all entities)
-                        .requestMatchers(HttpMethod.POST, "/api/**").hasRole("ADMIN")
+                        // POST and PUT — ADMIN and MANAGER only (create/update across all entities)
+                        .requestMatchers(HttpMethod.POST, "/api/**").hasAnyRole("ADMIN", "MANAGER")
 
-                        // GET — any authenticated user (USER or ADMIN)
-                        .requestMatchers(HttpMethod.GET, "/api/**").hasAnyRole("USER", "ADMIN", "SUPERVISOR")
+                        // GET — any authenticated user (ADMIN, MANAGER or STAFF)
+                        .requestMatchers(HttpMethod.GET, "/api/**").hasAnyRole("ADMIN", "MANAGER", "STAFF")
 
                         // Everything else requires login
                         .anyRequest().authenticated()
@@ -76,4 +77,4 @@ public class SecurityConfig {
 
         return source;
     }
-}
+    }

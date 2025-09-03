@@ -1,17 +1,21 @@
 package com.kfarms.mapper;
 
+import com.kfarms.dto.FeedRequestDto;
+import com.kfarms.dto.FeedResponseDto;
 import com.kfarms.entity.Feed;
-import com.kfarms.dto.FeedDto;
 
 public class FeedMapper {
-    public static FeedDto toDto(Feed entity){
-        FeedDto dto = new FeedDto();
+    public static FeedResponseDto toResponseDto(Feed entity){
+        FeedResponseDto dto = new FeedResponseDto();
         dto.setId(entity.getId());
         dto.setBatchId(entity.getBatchId());
         dto.setBatchType(entity.getBatchType());
         dto.setFeedName(entity.getFeedName());
         dto.setQuantityUsed(entity.getQuantityUsed());
+        dto.setNotes(entity.getNotes());
         dto.setDate(entity.getDate());
+
+        // AUDITABLE
         dto.setCreatedBy(entity.getCreatedBy());
         dto.setUpdatedBy(entity.getUpdatedBy());
         dto.setCreatedAt(entity.getCreatedAt());
@@ -19,14 +23,14 @@ public class FeedMapper {
         return dto;
     }
 
-    public static Feed toEntity(FeedDto dto){
+    public static Feed toEntity(FeedRequestDto dto){
         Feed entity = new Feed();
-        entity.setId(dto.getId());
         entity.setBatchId(dto.getBatchId());
         entity.setBatchType(dto.getBatchType());
         entity.setFeedName(dto.getFeedName());
         entity.setQuantityUsed(dto.getQuantityUsed());
-        entity.setDate(entity.getDate());
+        entity.setNotes(dto.getNotes());
+        entity.setDate(dto.getDate());
         return entity;
     }
 }

@@ -31,6 +31,8 @@ public class Livestock extends Auditable{
     private LivestockType type; // LAYER, DUCK, FOWL, etc.
 
     private LocalDate arrivalDate;
+
+    @Column(nullable = true) // explicitly nullable
     private String notes;
 
     // Initial age when arriving (weeks). 0 for FARM_BIRTH

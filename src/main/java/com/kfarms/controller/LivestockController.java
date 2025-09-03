@@ -47,7 +47,7 @@ public class LivestockController {
     }
 
     // READ - all livestock
-    @PreAuthorize("hasAnyRole('USER', 'ADMIN', 'SUPERVISOR')")
+    @PreAuthorize("hasAnyRole('USER', 'MANAGER', 'STAFF')")
     @GetMapping
     public ResponseEntity<ApiResponse<Map<String, Object>>> getAll(
         @RequestParam(defaultValue = "0") int page,
@@ -64,7 +64,7 @@ public class LivestockController {
     }
 
     // READ - get livestock by ID
-    @PreAuthorize("hasAnyRole('USER', 'ADMIN', 'SUPERVISOR')")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER') or hasRole('STAFF')")
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<LivestockResponse>> getById(@PathVariable Long id){
         LivestockResponse response = service.getById(id);
@@ -79,7 +79,7 @@ public class LivestockController {
     }
 
     // UPDATE - update existing livestock
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
     @PutMapping("/{id}")
     public ResponseEntity<ApiResponse<LivestockResponse>> update(
             @PathVariable Long id,
@@ -104,7 +104,7 @@ public class LivestockController {
     }
 
     // SEARCH / FILTER
-    @PreAuthorize("hasRole('ADMIN') or hasRole('USER') or hasRole('SUPERVISOR')")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER') or hasRole('STAFF')")
     @GetMapping("/search")
     public ResponseEntity<ApiResponse<List<LivestockResponse>>> search(
             @RequestParam(required = false) String batchName,
@@ -121,7 +121,7 @@ public class LivestockController {
     }
 
     // DASHBOARD SUMMARY
-    @PreAuthorize("hasRole('ADMIN') or hasRole('USER') or hasRole('SUPERVISOR')")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER') or hasRole('STAFF')")
     @GetMapping("/summary")
     public ResponseEntity<ApiResponse<Map<String, Object>>> summary(){
         Map<String, Object> summary = service.getSummary();

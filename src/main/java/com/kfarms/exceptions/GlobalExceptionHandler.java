@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.nio.file.AccessDeniedException;
+import java.util.Arrays;
 
 @ControllerAdvice
 public class GlobalExceptionHandler  {
@@ -51,6 +52,13 @@ public class GlobalExceptionHandler  {
                 .body(new ApiResponse<>(false, "Invalid username or password", null));
     }
 
+    // Bad Request - invalid arguments (live type conversion)
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ApiResponse<String>> handleIllegalArgument(IllegalArgumentException ex){
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(false, ex.getMessage(), null));
+    }
+
     // Generic errors
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<ApiResponse<String>> handleRuntime(RuntimeException ex){
@@ -65,20 +73,27 @@ public class GlobalExceptionHandler  {
                 .body(new ApiResponse<>(false, ex.getMessage(), null));
     }
 
-    // Bad Request - invalid arguments (live type conversion)
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<ApiResponse<String>> handleIllegalArgument(IllegalArgumentException ex){
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(false, ex.getMessage(), null));
-    }
-
     // Type Mismatch
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<ApiResponse<String>> handleTypeMismatch(MethodArgumentTypeMismatchException ex){
-        String message = String.format("Invalid value '%s' for parameter '%s'. Expected type: %s",
-                ex.getMessage(),
-                ex.getName(),
-                ex.getRequiredType() !=null ? ex.getRequiredType().getSimpleName() : "unknown");
+        String message;
+
+        if (ex.getRequiredType() != null && ex.getRequiredType().isEnum()) {
+           Object[] enumConstraints = ex.getRequiredType().getEnumConstants();
+           message = String.format(
+                   "invalid value '%s' for parameter '%s', Allowed values: %s",
+                   ex.getValue(),
+                   ex.getName(),
+                   Arrays.toString(enumConstraints)
+           );
+        } else {
+            message = String.format(
+                    "Invalid value '%s' for parameter '%s'. Expected type: %s",
+                    ex.getValue(),
+                    ex.getName(),
+                    ex.getRequiredType() != null ? ex.getRequiredType().getSimpleName() : "unknown"
+            );
+        }
 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(new ApiResponse<>(false, message, null));

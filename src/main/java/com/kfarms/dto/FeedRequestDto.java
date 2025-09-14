@@ -1,5 +1,6 @@
 package com.kfarms.dto;
 
+import com.kfarms.entity.LivestockType;
 import lombok.Data;
 import java.time.LocalDate;
 

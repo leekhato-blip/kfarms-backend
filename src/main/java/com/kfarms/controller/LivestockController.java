@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.ObjectCodec;
 import com.kfarms.dto.LivestockRequest;
 import com.kfarms.dto.LivestockResponse;
 import com.kfarms.entity.ApiResponse;
+import com.kfarms.entity.LivestockType;
 import com.kfarms.service.LivestockService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -46,8 +47,8 @@ public class LivestockController {
         );
     }
 
-    // READ - all livestock
-    @PreAuthorize("hasAnyRole('USER', 'MANAGER', 'STAFF')")
+    // READ - all livestock (pagination and filtering)
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
     @GetMapping
     public ResponseEntity<ApiResponse<Map<String, Object>>> getAll(
         @RequestParam(defaultValue = "0") int page,

@@ -1,15 +1,14 @@
 package com.kfarms.service;
 
 import com.kfarms.dto.FeedResponseDto;
-import com.kfarms.entity.Feed;
 import com.kfarms.dto.FeedRequestDto;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
+
 
 import java.util.List;
+import java.util.Map;
 
 public interface FeedService {
-    Page<FeedResponseDto> getAll(String batchType, String feedName, Pageable pageable);
+    Map<String, Object> getAll(int page, int size, String batchType);
     FeedResponseDto getById(Long id);
     FeedResponseDto save(FeedRequestDto dto);
     void delete(Long id);

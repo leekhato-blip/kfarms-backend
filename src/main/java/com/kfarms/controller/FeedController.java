@@ -6,16 +6,11 @@ import com.kfarms.dto.FeedResponseDto;
 import com.kfarms.entity.ApiResponse;
 import com.kfarms.service.FeedService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
-import java.util.stream.Collectors;
-
+import java.util.Map;
 
 @RestController
 @RequiredArgsConstructor
@@ -25,15 +20,16 @@ public class FeedController {
 
 
     @GetMapping
-    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER') or hasRole('STAFF')")
-    public ResponseEntity<ApiResponse<Page<FeedResponseDto>>> getAll(
-            @RequestParam(required = false) String batchType,
-            @RequestParam(required = false) String feedName,
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER','STAFF')")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getAll(
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String batchType
     ) {
-        Page<FeedResponseDto> result = service.getAll(batchType, feedName, PageRequest.of(page, size));
-        return ResponseEntity.ok(new ApiResponse<>(true, "Feeds fetched successfully", result));
+        System.out.println("batchType param received: '" + batchType + "'");
+
+        Map<String, Object> response = service.getAll(page, size, batchType);
+        return ResponseEntity.ok(new ApiResponse<>(true, "Feeds fetched successfully", response));
     }
 
     // CREATE - add new feed

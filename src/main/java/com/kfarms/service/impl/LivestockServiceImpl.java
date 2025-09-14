@@ -18,10 +18,7 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -49,16 +46,19 @@ public class LivestockServiceImpl implements LivestockService {
             try{
                 typeEnum = LivestockType.valueOf(type.toUpperCase());
             } catch (IllegalArgumentException ex){
-                throw new IllegalArgumentException("Invalid livestock type: " + type);
+                throw new IllegalArgumentException(
+                        "Invalid livestock type: '" + type + "' . Allowed values: " + Arrays.toString(LivestockType.values())
+                );
             }
         }
-        final String batchNameFinal = batchName;
+//        final String batchNameFinal = batchName;
         final LivestockType typeEnumFinal = typeEnum;
-        final LocalDate arrivalDateFinal = arrivalDate;
+//        final LocalDate arrivalDateFinal = arrivalDate;
 
 
         Specification<Livestock> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
+
             if (batchName != null && !batchName.isBlank()) {
                 // use lower on expression and lowercase the param for case-insensitive search
                 predicates.add(cb.like(cb.lower(root.get("batchName")), "%" + batchName.toLowerCase() + "%"));

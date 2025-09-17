@@ -1,9 +1,6 @@
 package com.kfarms.entity;
 
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.LocalDate;
@@ -13,14 +10,29 @@ import java.time.LocalDate;
 @Data
 @Entity
 @Table(name = "Supplies")
-@AllArgsConstructor
-@NoArgsConstructor
+@RequiredArgsConstructor
 public class Supplies extends Auditable{
     @Id
     @GeneratedValue private Long id;
-    private String itemName;
+
+    @Column(nullable = false)
+    private String itemName; // e.g., "Layer Feed", Vaccine
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private SupplyCategory category; // FEED, LIVESTOCK, FISH, MEDICINE, EQUIPMENT, OTHER
+
+    @Column(nullable = false)
     private int quantity;
-    private double price;
-    private String supplier;
-    private LocalDate supplyDate;
+
+    @Column(nullable = false)
+    private double unitPrice;
+
+    @Column(nullable = false)
+    private double totalPrice; // auto = quantity + unitPrice
+
+    private String supplierName;
+
+    @Column(nullable = false)
+    private LocalDate date = LocalDate.now(); // default today
 }

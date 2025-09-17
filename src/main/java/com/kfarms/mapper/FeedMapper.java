@@ -5,6 +5,8 @@ import com.kfarms.dto.FeedResponseDto;
 import com.kfarms.entity.Feed;
 import com.kfarms.entity.FeedBatchType;
 
+import java.time.LocalDate;
+
 public class FeedMapper {
     public static FeedResponseDto toResponseDto(Feed entity){
         FeedResponseDto dto = new FeedResponseDto();
@@ -33,7 +35,7 @@ public class FeedMapper {
         entity.setFeedName(dto.getFeedName());
         entity.setQuantityUsed(dto.getQuantityUsed());
         entity.setNotes(dto.getNotes());
-        entity.setDate(dto.getDate());
+        entity.setDate(dto.getDate() != null ? dto.getDate() : LocalDate.now()); // default today
         return entity;
     }
 }

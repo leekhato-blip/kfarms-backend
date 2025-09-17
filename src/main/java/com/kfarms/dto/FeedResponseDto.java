@@ -12,7 +12,7 @@ public class FeedResponseDto {
     private String batchType; // LAYER, FISH
     private Long batchId;
     private String feedName;
-    private int quantityUsed;
+    private Integer quantityUsed;
     private String notes;
     private LocalDate date;
 

@@ -28,7 +28,7 @@ public class Feed extends Auditable{
     private String notes;
 
     @Column(nullable = false)
-    private int quantityUsed;
+    private Integer quantityUsed;
 
-    private LocalDate date;
+    private LocalDate date = LocalDate.now(); // default date
 }

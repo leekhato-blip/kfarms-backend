@@ -34,7 +34,7 @@ public class SecurityConfig {
                                            JwtAuthenticationFilter jwtAuthFilter) throws Exception {
         http
                 .cors(Customizer.withDefaults())
-                .csrf(csrf -> csrf.disable()) // Disable CSRF for now (especially useful for APIs)
+                .csrf(csrf -> csrf.disable()) // Disable CSRF useful for APIs
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         // Public auth endpoints (POST only)

@@ -51,9 +51,8 @@ public class LivestockServiceImpl implements LivestockService {
                 );
             }
         }
-//        final String batchNameFinal = batchName;
+
         final LivestockType typeEnumFinal = typeEnum;
-//        final LocalDate arrivalDateFinal = arrivalDate;
 
 
         Specification<Livestock> spec = (root, query, cb) -> {
@@ -128,29 +127,29 @@ public class LivestockServiceImpl implements LivestockService {
             throw new ResourceNotFoundException("Livestock", "id", id);
         }
         repo.deleteById(id);
-    }
+    };
 
     // SEARCH
-    @Override
-    public List<LivestockResponse> search(String batchName, String type, LocalDate arrivalDate){
-        List<Livestock> list = repo.findAll(); // start with all
-        if(batchName != null && !batchName.isEmpty()){
-            list = list.stream()
-                    .filter(l -> l.getBatchName().toLowerCase().contains(batchName.toLowerCase()))
-                    .toList();
-        }
-        if(type != null && !type.isEmpty()){
-            list = list.stream()
-                    .filter(l -> l.getType().name().equalsIgnoreCase(type))
-                    .toList();
-        }
-        if(arrivalDate != null){
-            list = list.stream()
-                    .filter(l -> arrivalDate.equals(l.getArrivalDate()))
-                    .toList();
-        }
-        return list.stream().map(LivestockMapper::toResponse).toList();
-    }
+//    @Override
+//    public List<LivestockResponse> search(String batchName, String type, LocalDate arrivalDate){
+//        List<Livestock> list = repo.findAll(); // start with all
+//        if(batchName != null && !batchName.isEmpty()){
+//            list = list.stream()
+//                    .filter(l -> l.getBatchName().toLowerCase().contains(batchName.toLowerCase()))
+//                    .toList();
+//        }
+//        if(type != null && !type.isEmpty()){
+//            list = list.stream()
+//                    .filter(l -> l.getType().name().equalsIgnoreCase(type))
+//                    .toList();
+//        }
+//        if(arrivalDate != null){
+//            list = list.stream()
+//                    .filter(l -> arrivalDate.equals(l.getArrivalDate()))
+//                    .toList();
+//        }
+//        return list.stream().map(LivestockMapper::toResponse).toList();
+//    }
 
     // SUMMARY
     @Override

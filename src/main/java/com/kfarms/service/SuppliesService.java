@@ -1,12 +1,15 @@
 package com.kfarms.service;
 
-import com.kfarms.entity.Supplies;
+import com.kfarms.dto.SuppliesRequestDto;
+import com.kfarms.dto.SuppliesResponseDto;
 
-import java.util.List;
+import java.util.Map;
 
 public interface SuppliesService {
-    List<Supplies> getAll();
-    Supplies getById(Long id);
-    Supplies save(Supplies supplies);
+    Map<String, Object> getAll(int page, int size, String itemName, String Supplier);
+    SuppliesResponseDto getById(Long id);
+    SuppliesResponseDto save(SuppliesRequestDto dto);
+    SuppliesResponseDto update(Long id, SuppliesRequestDto request, String updatedBy);
     void delete(Long id);
+    Map<String, Object> getSummary();
 }

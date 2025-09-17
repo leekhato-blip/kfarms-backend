@@ -104,23 +104,6 @@ public class LivestockController {
                 ));
     }
 
-    // SEARCH / FILTER
-    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER') or hasRole('STAFF')")
-    @GetMapping("/search")
-    public ResponseEntity<ApiResponse<List<LivestockResponse>>> search(
-            @RequestParam(required = false) String batchName,
-            @RequestParam(required = false) String type,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate arrivalDate
-    ){
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        System.out.println("Logged in as: " + auth.getName());
-        System.out.println("Authorities: " + auth.getAuthorities());
-        List<LivestockResponse> results = service.search(batchName, type, arrivalDate);
-        return ResponseEntity.ok(
-                new ApiResponse<>(true, "Search results fetched successfully", results)
-        );
-    }
-
     // DASHBOARD SUMMARY
     @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER') or hasRole('STAFF')")
     @GetMapping("/summary")

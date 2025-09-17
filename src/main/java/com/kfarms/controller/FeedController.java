@@ -3,12 +3,15 @@ package com.kfarms.controller;
 
 import com.kfarms.dto.FeedRequestDto;
 import com.kfarms.dto.FeedResponseDto;
+import com.kfarms.dto.LivestockResponse;
 import com.kfarms.entity.ApiResponse;
 import com.kfarms.service.FeedService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import java.util.Map;
 
@@ -18,7 +21,16 @@ import java.util.Map;
 public class FeedController {
     private final FeedService service;
 
+    // CREATE - add new feed
+    @PostMapping
+    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
+    public ResponseEntity<ApiResponse<FeedResponseDto>> create(@RequestBody FeedRequestDto dto) {
+        FeedResponseDto saved = service.save(dto);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(new ApiResponse<>(true, "Feed saved successfully", saved));
+    }
 
+    // READ - get all feeds
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN','MANAGER','STAFF')")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getAll(
@@ -32,15 +44,7 @@ public class FeedController {
         return ResponseEntity.ok(new ApiResponse<>(true, "Feeds fetched successfully", response));
     }
 
-    // CREATE - add new feed
-    @PostMapping
-    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
-    public ResponseEntity<ApiResponse<FeedResponseDto>> create(@RequestBody FeedRequestDto dto) {
-        FeedResponseDto saved = service.save(dto);
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(new ApiResponse<>(true, "Feed saved successfully", saved));
-    }
-
+    // READ - get feed by ID
     @GetMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER') or hasRole('STAFF')")
     public ResponseEntity<ApiResponse<FeedResponseDto>> getById(@PathVariable Long id) {
@@ -53,8 +57,22 @@ public class FeedController {
         }
     }
 
+    // UPDATE - update existing Feed
+    @PutMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
+    public ResponseEntity<ApiResponse<FeedResponseDto>> update(
+            @PathVariable Long id,
+            @RequestBody FeedRequestDto request
+    ) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String updatedBy = auth.getName();
+        FeedResponseDto response = service.update(id, request, updatedBy);
+        return ResponseEntity.ok(
+                new ApiResponse<>(true, "Feed updated successfully", response)
+        );
+    }
 
-
+    // DELETE - delete existing feed
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<String>> delete(@PathVariable Long id){
@@ -64,4 +82,14 @@ public class FeedController {
         );
     }
 
+
+    // SUMMARY - dashboard, reports and analysis
+    @GetMapping("/summary")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER') or hasRole('STAFF')")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> summary() {
+        Map<String, Object> summary = service.getSummary();
+        return ResponseEntity.ok(
+                new ApiResponse<>(true, "Feed summary fetched", summary)
+        );
+    }
 }

@@ -2,10 +2,8 @@ package com.kfarms.service;
 
 import com.kfarms.dto.LivestockRequest;
 import com.kfarms.dto.LivestockResponse;
-import com.kfarms.entity.LivestockType;
 
 import java.time.LocalDate;
-import java.util.List;
 import java.util.Map;
 
 public interface LivestockService {
@@ -15,5 +13,5 @@ public interface LivestockService {
     LivestockResponse update(Long id, LivestockRequest request, String updatedBy);
     void delete(Long id);
     Map<String, Object> getSummary();
-    List<LivestockResponse> search(String batchName, String type, LocalDate arrivalDate);
+//    List<LivestockResponse> search(String batchName, String type, LocalDate arrivalDate);
 }

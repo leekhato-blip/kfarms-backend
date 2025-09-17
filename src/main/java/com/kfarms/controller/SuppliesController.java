@@ -1,66 +1,98 @@
 package com.kfarms.controller;
 
 
-import com.kfarms.dto.SuppliesDto;
+import com.kfarms.dto.SuppliesRequestDto;
+import com.kfarms.dto.SuppliesResponseDto;
 import com.kfarms.entity.ApiResponse;
-import com.kfarms.entity.Supplies;
-import com.kfarms.mapper.SuppliesMapper;
 import com.kfarms.service.SuppliesService;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
-import java.util.stream.Collectors;
+import java.util.Map;
 
 // TODO: Add role-based access control to this controller
 @RestController
-@RequestMapping("/api/Supplies")
+@RequestMapping("/api/supplies")
+@RequiredArgsConstructor
 public class SuppliesController {
     private final SuppliesService service;
-    public SuppliesController(SuppliesService service){
-        this.service = service;
-    }
 
-    @GetMapping("/{id}")
-    public ResponseEntity<ApiResponse<SuppliesDto>> getById(@PathVariable Long id){
-        Supplies supplies = service.getById(id);
-        if (supplies != null){
-            return ResponseEntity.ok(
-                    new ApiResponse<>(true, "Supply record fetched successfully", SuppliesMapper.toDto(supplies))
-            );
-        } else {
-            return ResponseEntity.notFound().build();
-        }
-    }
-
-    @GetMapping
-    public ResponseEntity<ApiResponse<List<SuppliesDto>>> getAll(){
-        List<SuppliesDto> dtos = service.getAll().stream()
-                .map(SuppliesMapper::toDto)
-                .collect(Collectors.toList());
-
-        return ResponseEntity.ok(
-                new ApiResponse<>(true, "All supply records fetched successfully", dtos)
-        );
-    }
-
-
+    // CREATE - add a new supply
     @PostMapping
-    public ResponseEntity<ApiResponse<SuppliesDto>> create(@RequestBody SuppliesDto dto){
-        Supplies supplies = service.save(SuppliesMapper.toEntity(dto));
+    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
+    public ResponseEntity<ApiResponse<SuppliesResponseDto>> create(@RequestBody SuppliesRequestDto dto){
+        SuppliesResponseDto saved = service.save(dto);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(
-                        new ApiResponse<>(true, "Supply record saved successfully", SuppliesMapper.toDto(supplies))
+                        new ApiResponse<>(true, "Supply record saved successfully", saved)
                 );
     }
 
+    // READ - Get All (with Pagination and Filtering)
+    @GetMapping
+    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER') or hasRole('STAFF')")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getAll(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String itemName,
+            @RequestParam(required = false) String supplier
+    ){
+        Map<String, Object> response = service.getAll(page, size, itemName, supplier);
+        return ResponseEntity.ok(new ApiResponse<>(true, "Supplies fetched successfully", response));
+    }
 
+    // READ - get supply by ID
+    @GetMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
+    public ResponseEntity<ApiResponse<SuppliesResponseDto>> getById(@PathVariable Long id) {
+        SuppliesResponseDto dto = service.getById(id);
+        if (dto != null){
+            return ResponseEntity.ok(
+                    new ApiResponse<>(true, "Supply record fetched successfully", dto)
+            );
+        } else {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(new ApiResponse<>(false, "Supply with ID: " + id + " not found", null));
+        }
+    }
+
+    // UPDATE
+    @PutMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
+    public ResponseEntity<ApiResponse<SuppliesResponseDto>> update(
+            @PathVariable Long id,
+            @RequestBody SuppliesRequestDto request
+    ) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String updatedBy = auth.getName();
+        SuppliesResponseDto response = service.update(id, request, updatedBy);
+        return ResponseEntity.ok(
+                new ApiResponse<>(true, "Supply updated successfully", response)
+        );
+    }
+
+    // DELETE - delete a supply item by ID
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<String>> delete(@PathVariable Long id){
         service.delete(id);
         return ResponseEntity.ok(
                 new ApiResponse<>(true, "Supply record deleted successfully", null)
+        );
+    }
+
+    // SUMMARY - dashboard, reports and analysis
+    @GetMapping("/summary")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER') or hasRole('STAFF')")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> summary() {
+        Map<String, Object> summary = service.getSummary();
+        return ResponseEntity.ok(
+                new ApiResponse<>(true, "Supply summary fetched", summary)
         );
     }
 }

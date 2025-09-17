@@ -1,17 +1,24 @@
 package com.kfarms.mapper;
 
-import com.kfarms.dto.SuppliesDto;
+import com.kfarms.dto.SuppliesRequestDto;
+import com.kfarms.dto.SuppliesResponseDto;
 import com.kfarms.entity.Supplies;
 
+import java.time.LocalDate;
+
 public class SuppliesMapper {
-    public static SuppliesDto toDto(Supplies entity){
-        SuppliesDto dto = new SuppliesDto();
+    public static SuppliesResponseDto toResponseDto(Supplies entity){
+        SuppliesResponseDto dto = new SuppliesResponseDto();
         dto.setId(entity.getId());
         dto.setItemName(entity.getItemName());
-        dto.setSupplier(entity.getSupplier());
+        dto.setCategory(entity.getCategory());
+        dto.setSupplierName(entity.getSupplierName());
         dto.setQuantity(entity.getQuantity());
-        dto.setPrice(entity.getPrice());
-        dto.setSupplyDate(entity.getSupplyDate());
+        dto.setUnitPrice(entity.getUnitPrice());
+        dto.setTotalPrice(entity.getTotalPrice());
+        dto.setDate(entity.getDate());
+
+        // audits
         dto.setCreatedBy(entity.getCreatedBy());
         dto.setUpdatedBy(entity.getUpdatedBy());
         dto.setCreatedAt(entity.getCreatedAt());
@@ -19,14 +26,17 @@ public class SuppliesMapper {
         return dto;
     }
 
-    public static Supplies toEntity(SuppliesDto dto){
+    public static Supplies toEntity(SuppliesRequestDto dto){
         Supplies entity = new Supplies();
-        entity.setId(dto.getId());
         entity.setItemName(dto.getItemName());
-        entity.setSupplier(dto.getSupplier());
         entity.setQuantity(dto.getQuantity());
-        entity.setPrice(dto.getPrice());
-        entity.setSupplyDate(dto.getSupplyDate());
+        entity.setUnitPrice(dto.getUnitPrice());
+
+        // auto calculate total
+        entity.setTotalPrice(dto.getQuantity() + dto.getUnitPrice());
+
+        entity.setSupplierName(dto.getSupplierName());
+        entity.setDate(dto.getDate() != null ? dto.getDate() : LocalDate.now());
         return entity;
     }
 }

@@ -8,9 +8,10 @@ import java.time.LocalDate;
 @Data
 public class SuppliesRequestDto {
     private String itemName;
-    private SupplyCategory category;
+    private String category;
     private int quantity;
     private double unitPrice;
     private String supplierName;
+    private String notes;
     private LocalDate date; // optional, defaults to today
 }

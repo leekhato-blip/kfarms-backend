@@ -26,7 +26,7 @@ import java.util.stream.Collectors;
 public class LivestockServiceImpl implements LivestockService {
     private final LivestockRepository repo;
 
-    // CREATE - save Livestock
+    // CREATE - create Livestock
     @Override
     public  LivestockResponse create(LivestockRequest request, String createBy){
         Livestock entity = LivestockMapper.toEntity(request);

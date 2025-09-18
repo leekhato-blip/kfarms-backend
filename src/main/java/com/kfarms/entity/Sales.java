@@ -1,9 +1,6 @@
 package com.kfarms.entity;
 
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.LocalDate;
@@ -11,15 +8,31 @@ import java.time.LocalDate;
 // SALES/DISTRIBUTIONS
 @Data
 @Entity
-@Table(name = "Sales")
-@AllArgsConstructor
-@NoArgsConstructor
+@Table(name = "sales")
+@RequiredArgsConstructor
 public class Sales extends Auditable{
     @Id
     @GeneratedValue private Long id;
-    private String productType; // e.g. EGGS, FISH
+
+    @Column(nullable = false)
+    private String itemName; // e.g., "Layer Eggs", "Fish 1kg"
+
+    @Column(nullable = false)
+    @Enumerated(EnumType.STRING)
+    private SalesCategory category; // e.g. EGGS, FISH
+
+    @Column(nullable = false)
     private int quantity;
-    private double price;
+
+    @Column(nullable = false)
+    private double unitPrice;
+
+    @Column(nullable = false)
+    private double totalPrice;
+
+    private String notes;
     private String buyer;
-    private LocalDate saleDate;
+
+    @Column(nullable = false)
+    private LocalDate date = LocalDate.now(); // default today
 }

@@ -24,7 +24,7 @@ public class FishPondServiceImpl implements FishPondService {
         }
         fishPond.setUpdatedBy(username);
         return repo.save(fishPond);
-        //return repo.save(fishPond);
+        //return repo.create(fishPond);
     }
     public void delete(Long id){ repo.deleteById(id);}
 }

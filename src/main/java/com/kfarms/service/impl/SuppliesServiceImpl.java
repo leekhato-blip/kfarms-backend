@@ -34,15 +34,18 @@ public class SuppliesServiceImpl implements SuppliesService {
 
     // READ - get all with filtering & pagination
     @Override
-    public Map<String, Object> getAll(int page, int size, String itemName, String supplier){
+    public Map<String, Object> getAll(int page, int size, String itemName, String category, LocalDate date){
         Pageable pageable = PageRequest.of(page, size, Sort.by("id").descending());
         Specification<Supplies> spec = (root, query, cb) -> {
           List<Predicate> predicates = new ArrayList<>();
           if (itemName != null && !itemName.isBlank()) {
               predicates.add(cb.like(cb.lower(root.get("itemName")), "%" + itemName.toLowerCase() + "%"));
           }
-          if (supplier != null && !supplier.isBlank()) {
-              predicates.add(cb.like(cb.lower(root.get("supplier")), "%" + supplier.toLowerCase() + "%"));
+          if (category != null && !category.isBlank()) {
+              predicates.add(cb.like(cb.lower(root.get("category")), "%" + category.toLowerCase() + "%"));
+          }
+          if (date != null) {
+              predicates.add(cb.equal(root.get("date"), date));
           }
           return cb.and(predicates.toArray(new Predicate[0]));
         };
@@ -115,6 +118,7 @@ public class SuppliesServiceImpl implements SuppliesService {
         double totalAmount = all.stream()
                 .mapToDouble(s -> s.getUnitPrice() * s.getQuantity())
                 .sum();
+        summary.put("totalAmountSpent", totalAmount);
 
         // last supply date
         all.stream()

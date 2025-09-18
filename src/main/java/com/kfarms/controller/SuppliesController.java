@@ -6,6 +6,7 @@ import com.kfarms.dto.SuppliesResponseDto;
 import com.kfarms.entity.ApiResponse;
 import com.kfarms.service.SuppliesService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -13,6 +14,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.util.Map;
 
 // TODO: Add role-based access control to this controller
@@ -40,9 +42,10 @@ public class SuppliesController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(required = false) String itemName,
-            @RequestParam(required = false) String supplier
-    ){
-        Map<String, Object> response = service.getAll(page, size, itemName, supplier);
+            @RequestParam(required = false) String category,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)LocalDate date
+            ){
+        Map<String, Object> response = service.getAll(page, size, itemName, category, date);
         return ResponseEntity.ok(new ApiResponse<>(true, "Supplies fetched successfully", response));
     }
 

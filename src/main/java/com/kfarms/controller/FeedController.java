@@ -7,12 +7,15 @@ import com.kfarms.dto.LivestockResponse;
 import com.kfarms.entity.ApiResponse;
 import com.kfarms.service.FeedService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
+
+import java.time.LocalDate;
 import java.util.Map;
 
 @RestController
@@ -36,11 +39,12 @@ public class FeedController {
     public ResponseEntity<ApiResponse<Map<String, Object>>> getAll(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
-            @RequestParam(required = false) String batchType
-    ) {
+            @RequestParam(required = false) String batchType,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
+            ) {
         System.out.println("batchType param received: '" + batchType + "'");
 
-        Map<String, Object> response = service.getAll(page, size, batchType);
+        Map<String, Object> response = service.getAll(page, size, batchType, date);
         return ResponseEntity.ok(new ApiResponse<>(true, "Feeds fetched successfully", response));
     }
 

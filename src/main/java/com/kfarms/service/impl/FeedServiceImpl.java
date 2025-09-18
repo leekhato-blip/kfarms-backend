@@ -38,7 +38,7 @@ public class FeedServiceImpl implements FeedService {
 
     // READ - get all with filtering & pagination
     @Override
-    public Map<String, Object> getAll(int page, int size, String batchType) {
+    public Map<String, Object> getAll(int page, int size, String batchType, LocalDate date) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("id").descending());
 
         // Convert batchType string to enum (case-insensitive)
@@ -60,7 +60,10 @@ public class FeedServiceImpl implements FeedService {
         Specification<Feed> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
             if (batchTypeEnumFinal != null) {
-                    predicates.add(cb.equal(root.get("batchType"), batchTypeEnumFinal));
+                predicates.add(cb.equal(root.get("batchType"), batchTypeEnumFinal));
+            }
+            if (date != null) {
+                predicates.add(cb.equal(root.get("date"), date));
             }
             
             return cb.and(predicates.toArray(new Predicate[0]));

@@ -2,8 +2,9 @@ package com.kfarms.repository;
 
 import com.kfarms.entity.Sales;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.stereotype.Repository;
 
 @Repository
-public interface SalesRepository extends JpaRepository<Sales, Long> {
+public interface SalesRepository extends JpaRepository<Sales, Long>, JpaSpecificationExecutor<Sales> {
 }

@@ -1,11 +1,10 @@
 package com.kfarms.controller;
 
-import com.kfarms.dto.SalesDto;
+import com.kfarms.dto.SalesResponseDto;
 import com.kfarms.entity.ApiResponse;
 import com.kfarms.entity.Sales;
 import com.kfarms.mapper.SalesMapper;
 import com.kfarms.service.SalesService;
-import org.apache.coyote.Response;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -23,7 +22,7 @@ public class SalesController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<ApiResponse<SalesDto>> getById(@PathVariable Long id){
+    public ResponseEntity<ApiResponse<SalesResponseDto>> getById(@PathVariable Long id){
         Sales sales = service.getById(id);
         if(id != null){
             return ResponseEntity.ok(
@@ -35,8 +34,8 @@ public class SalesController {
     }
 
     @GetMapping
-    public ResponseEntity<ApiResponse<List<SalesDto>>> getAll(){
-        List<SalesDto> dtos = service.getAll().stream()
+    public ResponseEntity<ApiResponse<List<SalesResponseDto>>> getAll(){
+        List<SalesResponseDto> dtos = service.getAll().stream()
                 .map(SalesMapper::toDto)
                 .collect(Collectors.toList());
 
@@ -46,8 +45,8 @@ public class SalesController {
     }
 
     @PostMapping
-    public ResponseEntity<ApiResponse<SalesDto>> create(@RequestBody SalesDto dto){
-        Sales sales = service.save(SalesMapper.toEntity(dto));
+    public ResponseEntity<ApiResponse<SalesResponseDto>> create(@RequestBody SalesResponseDto dto){
+        Sales sales = service.create(SalesMapper.toEntity(dto));
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(
                         new ApiResponse<>(true, "Sales record saved successfully", SalesMapper.toDto(sales))

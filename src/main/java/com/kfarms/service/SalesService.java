@@ -1,12 +1,16 @@
 package com.kfarms.service;
 
-import com.kfarms.entity.Sales;
+import com.kfarms.dto.SalesRequestDto;
+import com.kfarms.dto.SalesResponseDto;
 
-import java.util.List;
+import java.time.LocalDate;
+import java.util.Map;
 
 public interface SalesService {
-    List<Sales> getAll();
-    Sales getById(Long id);
-    Sales save(Sales sales);
+    SalesResponseDto save(SalesRequestDto dto);
+    Map<String, Object> getAll(int page, int size, String itemName, String category, LocalDate date);
+    SalesResponseDto getById(Long id);
+    SalesResponseDto update(Long id, SalesRequestDto dto, String updatedBy);
     void delete(Long id);
+    Map<String, Object> getSummary();
 }

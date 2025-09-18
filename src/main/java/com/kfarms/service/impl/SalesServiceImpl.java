@@ -15,7 +15,7 @@ public class SalesServiceImpl implements SalesService {
     public SalesServiceImpl(SalesRepository repo){this.repo = repo;}
     public List<Sales> getAll() { return repo.findAll(); }
     public Sales getById(Long id) { return repo.findById(id).orElse(null);}
-    public Sales save(Sales sales) {
+    public Sales create(Sales sales) {
         return repo.save(sales);
     }
     public void delete(Long id) { repo.deleteById(id);}

@@ -1,7 +1,7 @@
 package com.kfarms.entity;
 
 public enum SalesCategory {
-    EGGS,
+    LIVESTOCK,
     FISH,
     MANURE,
     NOILER,

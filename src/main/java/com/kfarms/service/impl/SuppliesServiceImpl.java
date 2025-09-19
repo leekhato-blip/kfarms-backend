@@ -18,6 +18,7 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 public class SuppliesServiceImpl implements SuppliesService {
@@ -26,7 +27,7 @@ public class SuppliesServiceImpl implements SuppliesService {
 
     // CREATE - add new supply item
     @Override
-    public SuppliesResponseDto save(SuppliesRequestDto dto) {
+    public SuppliesResponseDto create(SuppliesRequestDto dto) {
         Supplies entity = SuppliesMapper.toEntity(dto);
         Supplies saved = repo.save(entity);
         return SuppliesMapper.toResponseDto(saved);
@@ -106,19 +107,40 @@ public class SuppliesServiceImpl implements SuppliesService {
         List<Supplies> all = repo.findAll();
         Map<String, Object> summary = new HashMap<>();
 
-        // total records
+        // Total Supply records
         summary.put("totalSupplies", all.size());
 
-        // total quantity purchased
-        int totaQuantity = all.stream()
-                .mapToInt(Supplies::getQuantity).sum();
-        summary.put("totalQuantity", totaQuantity);
+        // Total quantity purchased
+        int totalQuantity = all.stream()
+                .mapToInt(Supplies::getQuantity)
+                .sum();
+        summary.put("totalQuantity", totalQuantity);
 
         // total amount spent
         double totalAmount = all.stream()
-                .mapToDouble(s -> s.getUnitPrice() * s.getQuantity())
+                .mapToDouble(Supplies::getTotalPrice)
                 .sum();
         summary.put("totalAmountSpent", totalAmount);
+
+        // Amount spent by category
+        Map<String, Double> amountByCategory = all.stream()
+                        .collect(Collectors.groupingBy(s -> s.getCategory().name(),
+                                Collectors.summingDouble(Supplies::getTotalPrice)));
+        summary.put("amountByCategory", amountByCategory);
+
+        // Quantity purchased by category
+        Map<String, Integer> quantityByCategory = all.stream()
+                        .collect(Collectors.groupingBy(s -> s.getCategory().name(),
+                                Collectors.summingInt(Supplies::getQuantity)));
+        summary.put("quantityByCategory", quantityByCategory);
+
+        // Amount spent by supplier
+        Map<String, Double> amountBySupplier = all.stream()
+                        .filter(s -> s.getSupplierName() != null)
+                        .collect(Collectors.groupingBy(Supplies::getSupplierName,
+                                Collectors.summingDouble(Supplies::getTotalPrice)));
+        summary.put("amountBySupplier", amountBySupplier);
+
 
         // last supply date
         all.stream()

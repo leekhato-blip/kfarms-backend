@@ -28,7 +28,7 @@ public class SuppliesController {
     @PostMapping
     @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
     public ResponseEntity<ApiResponse<SuppliesResponseDto>> create(@RequestBody SuppliesRequestDto dto){
-        SuppliesResponseDto saved = service.save(dto);
+        SuppliesResponseDto saved = service.create(dto);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(
                         new ApiResponse<>(true, "Supply record saved successfully", saved)
@@ -43,7 +43,7 @@ public class SuppliesController {
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(required = false) String itemName,
             @RequestParam(required = false) String category,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)LocalDate date
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
             ){
         Map<String, Object> response = service.getAll(page, size, itemName, category, date);
         return ResponseEntity.ok(new ApiResponse<>(true, "Supplies fetched successfully", response));
@@ -51,7 +51,7 @@ public class SuppliesController {
 
     // READ - get supply by ID
     @GetMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER') or hasRole('STAFF')")
     public ResponseEntity<ApiResponse<SuppliesResponseDto>> getById(@PathVariable Long id) {
         SuppliesResponseDto dto = service.getById(id);
         if (dto != null){
@@ -64,7 +64,7 @@ public class SuppliesController {
         }
     }
 
-    // UPDATE
+    // UPDATE - update existing supply item by ID
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
     public ResponseEntity<ApiResponse<SuppliesResponseDto>> update(

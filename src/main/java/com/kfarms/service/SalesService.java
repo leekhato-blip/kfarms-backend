@@ -7,7 +7,7 @@ import java.time.LocalDate;
 import java.util.Map;
 
 public interface SalesService {
-    SalesResponseDto save(SalesRequestDto dto);
+    SalesResponseDto create(SalesRequestDto dto);
     Map<String, Object> getAll(int page, int size, String itemName, String category, LocalDate date);
     SalesResponseDto getById(Long id);
     SalesResponseDto update(Long id, SalesRequestDto dto, String updatedBy);

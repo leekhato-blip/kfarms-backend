@@ -14,7 +14,7 @@ public class SalesResponseDto {
     private String category; // e.g. EGGS, FISH
     private int quantity;
     private double unitPrice;
-    private double totaPrice;
+    private double totalPrice;
     private String buyer;
     private String notes;
     private LocalDate date;

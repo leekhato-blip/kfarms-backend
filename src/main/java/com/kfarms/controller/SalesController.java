@@ -1,63 +1,103 @@
 package com.kfarms.controller;
 
+import com.kfarms.dto.SalesRequestDto;
 import com.kfarms.dto.SalesResponseDto;
 import com.kfarms.entity.ApiResponse;
-import com.kfarms.entity.Sales;
-import com.kfarms.mapper.SalesMapper;
 import com.kfarms.service.SalesService;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
+import java.time.LocalDate;
+import java.util.Map;
 
-import java.util.List;
-import java.util.stream.Collectors;
 
 // TODO: Add role-based access control to this controller
 @RestController
-@RequestMapping("/api/Sales")
+@RequestMapping("/api/sales")
 public class SalesController {
     private final SalesService service;
     public SalesController(SalesService service){
         this.service = service;
     }
 
-    @GetMapping("/{id}")
-    public ResponseEntity<ApiResponse<SalesResponseDto>> getById(@PathVariable Long id){
-        Sales sales = service.getById(id);
-        if(id != null){
-            return ResponseEntity.ok(
-                    new ApiResponse<>(true, "Sales record fetched successfully", SalesMapper.toDto(sales))
-            );
-        } else {
-            return ResponseEntity.notFound().build();
-        }
-    }
-
-    @GetMapping
-    public ResponseEntity<ApiResponse<List<SalesResponseDto>>> getAll(){
-        List<SalesResponseDto> dtos = service.getAll().stream()
-                .map(SalesMapper::toDto)
-                .collect(Collectors.toList());
-
-        return ResponseEntity.ok(
-                new ApiResponse<>(true, "All sales record fetched successfully", dtos)
-        );
-    }
-
+    // CREATE - add new supply item
     @PostMapping
-    public ResponseEntity<ApiResponse<SalesResponseDto>> create(@RequestBody SalesResponseDto dto){
-        Sales sales = service.create(SalesMapper.toEntity(dto));
+    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
+    public ResponseEntity<ApiResponse<SalesResponseDto>> create(@RequestBody SalesRequestDto dto){
+        SalesResponseDto saved = service.create(dto);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(
-                        new ApiResponse<>(true, "Sales record saved successfully", SalesMapper.toDto(sales))
+                        new ApiResponse<>(true, "Sales record saved successfully", saved)
                 );
     }
 
+    // READ - get all with filtering & pagination
+    @GetMapping
+    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER') or hasRole('STAFF')")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getAll(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String itemName,
+            @RequestParam(required = false) String category,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
+            ){
+        Map<String, Object> response = service.getAll(page, size, itemName, category, date);
+        return ResponseEntity.ok(
+                new ApiResponse<>(true, "All sales record fetched successfully", response)
+        );
+    }
+
+    // READ - get supply by ID
+    @GetMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER') or hasRole('STAFF')")
+    public ResponseEntity<ApiResponse<SalesResponseDto>> getById(@PathVariable Long id){
+        SalesResponseDto dto = service.getById(id);
+        if(dto != null){
+            return ResponseEntity.ok(
+                    new ApiResponse<>(true, "Sales record fetched successfully", dto)
+            );
+        } else {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(new ApiResponse<>(false, "Sales with ID: " + id + " not found", null));
+        }
+    }
+
+    // UPDATE - update existing sales item by ID
+    @PutMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
+    public ResponseEntity<ApiResponse<SalesResponseDto>> update(
+            @PathVariable Long id,
+            @RequestBody SalesRequestDto request
+    ){
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String updatedBy = auth.getName();
+        SalesResponseDto response = service.update(id, request, updatedBy);
+        return ResponseEntity.ok(
+                new ApiResponse<>(true, "Sales updated successfully", response)
+        );
+    }
+
+    // DELETE - delete a supply item by ID
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<String>> delete(@PathVariable Long id){
         service.delete(id);
         return ResponseEntity.ok(
                 new ApiResponse<>(true, "Sales record deleted successfully", null)
+        );
+    }
+
+    // SUMMARY - dashboard, summary & analysis
+    @GetMapping("/summary")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER') or hasRole('STAFF')")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> summary() {
+        Map<String, Object> summary = service.getSummary();
+        return ResponseEntity.ok(
+                new ApiResponse<>(true, "Sales summary fetched", summary)
         );
     }
 }

@@ -1,13 +1,24 @@
 package com.kfarms.service.impl;
 
+import com.kfarms.dto.InventoryRequestDto;
+import com.kfarms.dto.InventoryResponseDto;
 import com.kfarms.entity.Inventory;
+import com.kfarms.entity.InventoryCategory;
+import com.kfarms.exceptions.ResourceNotFoundException;
+import com.kfarms.mapper.InventoryMapper;
 import com.kfarms.repository.InventoryRepository;
 import com.kfarms.service.InventoryService;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
+import jakarta.persistence.criteria.Predicate;
+import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
-import java.util.List;
+import java.time.LocalDate;
+import java.util.*;
 
 @Service
 public class InventoryServiceImpl implements InventoryService {
@@ -16,17 +27,111 @@ public class InventoryServiceImpl implements InventoryService {
     public InventoryServiceImpl(InventoryRepository repo) {
         this.repo = repo;
     }
-    public List<Inventory> getAll() {
 
-        return repo.findAll();
+
+    // CREATE - add new inventory item
+    @Override
+    public InventoryResponseDto create(InventoryRequestDto dto) {
+        Inventory entity = InventoryMapper.toEntity(dto);
+        Inventory saved = repo.save(entity);
+        return InventoryMapper.toResponseDto(saved);
     }
-    public Inventory getById(Long id) {
-        return repo.findById(id).orElse(null);
+
+    // READ - get all inventory items with Pagination and Filters
+    @Override
+    public Map<String, Object> getAll(int page, int size, String itemName, String category, LocalDate date) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by("id").descending());
+        Specification<Inventory> spec = (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            if (itemName != null && !itemName.isBlank()) {
+                predicates.add(cb.like(cb.lower(root.get("itemName")), "%" + itemName.toLowerCase() + "%"));
+            }
+            if (category != null && !category.isBlank()) {
+                predicates.add(cb.like(cb.lower(root.get("category")), "%" + category.toLowerCase() + "%"));
+            }
+            if (date != null) {
+                predicates.add(cb.equal(root.get("lastUpdated"), date));
+            }
+            return cb.and(predicates.toArray(new Predicate[0]));
+
+        };
+
+        Page<Inventory> inventoryPage = repo.findAll(spec, pageable);
+        List<InventoryResponseDto> items = inventoryPage.getContent().stream()
+                .map(InventoryMapper::toResponseDto)
+                .toList();
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("items", items);
+        result.put("page", page);
+        result.put("size", size);
+        result.put("totalItems", inventoryPage.getTotalElements());
+        result.put("totalPages", inventoryPage.getTotalPages());
+        result.put("hasNext", inventoryPage.hasNext());
+        result.put("hasPrevious", inventoryPage.hasPrevious());
+
+        return result;
+
+
     }
-    public Inventory save(Inventory inventory) {
-        return repo.save(inventory);
+
+    // READ - get inventory item by ID
+    @Override
+    public InventoryResponseDto getById(Long id) {
+        Optional<Inventory> inventory = repo.findById(id);
+        return inventory.map(InventoryMapper::toResponseDto).orElse(null);
     }
+
+    // UPDATE - update existing inventory by ID
+    @Override
+    public InventoryResponseDto update(Long id, InventoryRequestDto request, String updateBy) {
+        Inventory entity = repo.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Inventory", "id", id));
+        entity.setItemName(request.getItemName());
+        entity.setCategory(InventoryCategory.valueOf(request.getCategory().toUpperCase()));
+        entity.setQuantity(request.getQuantity());
+        entity.setUnit(request.getUnit());
+        entity.setUpdatedBy(updateBy);
+
+        repo.save(entity);
+        return InventoryMapper.toResponseDto(entity);
+
+    }
+
+    // DELETE - delete existing inventory item by ID
+    @Override
     public void delete(Long id) {
+        if (!repo.existsById(id)) {
+            throw new ResourceNotFoundException("Inventory", "id", id);
+        }
         repo.deleteById(id);
+    }
+
+    // SUMMARY - Dashboard, Report and Analysis
+    @Override
+    public Map<String, Object> getSummary() {
+        List<Inventory> all = repo.findAll();
+        Map<String, Object> summary = new HashMap<>();
+
+        // Total Inventory Record
+        summary.put("totalInventoryItems", all.size());
+
+        // Total Quantity
+        summary.put("totalQuantity", all.stream().mapToInt(Inventory::getQuantity).sum());
+
+        // breakdown by category
+        Map<String, Integer> categoryTotals = new HashMap<>();
+        for (Inventory inv : all) {
+            categoryTotals.merge(inv.getCategory().name(), inv.getQuantity(), Integer::sum);
+        }
+        summary.put("quantityByCategory", categoryTotals);
+
+        // low stock
+        List<String> lowStock = all.stream()
+                .filter(i -> i.getQuantity() <= i.getMinThreshold())
+                .map(Inventory::getItemName)
+                .toList();
+        summary.put("lowStockItems", lowStock);
+        return summary;
     }
 }

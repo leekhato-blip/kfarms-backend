@@ -33,7 +33,7 @@ public class SalesServiceImpl implements SalesService {
         return SalesMapper.toResponseDto(saved);
     }
 
-    // READ - get all with pagination & filtering
+    // READ - get all sales with pagination & filters
     @Override
     public Map<String, Object> getAll(int page, int size, String itemName, String category, LocalDate date) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("id").descending());

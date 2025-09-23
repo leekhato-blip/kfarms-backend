@@ -1,17 +1,26 @@
 package com.kfarms.mapper;
 
-import com.kfarms.dto.InventoryDto;
+import com.kfarms.dto.InventoryRequestDto;
+import com.kfarms.dto.InventoryResponseDto;
 import com.kfarms.entity.Inventory;
+import com.kfarms.entity.InventoryCategory;
+
+import java.time.LocalDate;
 
 public class InventoryMapper {
-    public static InventoryDto toDto(Inventory entity){
-        InventoryDto dto = new InventoryDto();
+    public static InventoryResponseDto toResponseDto(Inventory entity){
+        InventoryResponseDto dto = new InventoryResponseDto();
+
+        // fields
         dto.setId(entity.getId());
-        dto.setItem(entity.getItem());
-        dto.setCategory(entity.getCategory());
+        dto.setItemName(entity.getItemName());
+        dto.setCategory(entity.getCategory() != null ? entity.getCategory().name() : null);
         dto.setQuantity(entity.getQuantity());
         dto.setUnit(entity.getUnit());
+        dto.setMinThreshold(entity.getMinThreshold());
         dto.setLastUpdated(entity.getLastUpdated());
+
+        // audits
         dto.setCreatedBy(entity.getCreatedBy());
         dto.setUpdatedBy(entity.getUpdatedBy());
         dto.setCreatedAt(entity.getCreatedAt());
@@ -19,14 +28,17 @@ public class InventoryMapper {
         return dto;
     }
 
-    public static Inventory toEntity(InventoryDto dto){
+    public static Inventory toEntity(InventoryRequestDto dto){
         Inventory entity = new Inventory();
-        entity.setId(dto.getId());
-        entity.setItem(dto.getItem());
-        entity.setCategory(dto.getCategory());
+        entity.setItemName(dto.getItemName());
+        if (dto.getCategory() != null && !dto.getCategory().isBlank()) {
+            entity.setCategory(InventoryCategory.valueOf(dto.getCategory().trim().toUpperCase()));
+        }
         entity.setQuantity(dto.getQuantity());
         entity.setUnit(dto.getUnit());
-        entity.setLastUpdated(dto.getLastUpdated());
+        entity.setNote(dto.getNote());
+        entity.setMinThreshold(dto.getMinThreshold());
+        entity.setLastUpdated(dto.getLastUpdated() != null ? dto.getLastUpdated() : LocalDate.now());
         return entity;
     }
 }

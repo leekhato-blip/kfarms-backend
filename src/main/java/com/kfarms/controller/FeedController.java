@@ -3,7 +3,6 @@ package com.kfarms.controller;
 
 import com.kfarms.dto.FeedRequestDto;
 import com.kfarms.dto.FeedResponseDto;
-import com.kfarms.dto.LivestockResponse;
 import com.kfarms.entity.ApiResponse;
 import com.kfarms.service.FeedService;
 import lombok.RequiredArgsConstructor;
@@ -28,7 +27,7 @@ public class FeedController {
     @PostMapping
     @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
     public ResponseEntity<ApiResponse<FeedResponseDto>> create(@RequestBody FeedRequestDto dto) {
-        FeedResponseDto saved = service.save(dto);
+        FeedResponseDto saved = service.create(dto);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(new ApiResponse<>(true, "Feed saved successfully", saved));
     }

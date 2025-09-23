@@ -30,7 +30,7 @@ public class FeedServiceImpl implements FeedService {
 
     // CREATE - add new feed
     @Override
-    public FeedResponseDto save(FeedRequestDto dto) {
+    public FeedResponseDto create(FeedRequestDto dto) {
         Feed entity = FeedMapper.toEntity(dto);
         Feed saved = repo.save(entity);
         return FeedMapper.toResponseDto(saved);

@@ -30,8 +30,8 @@ public class Sales extends Auditable{
     @Column(nullable = false)
     private double totalPrice;
 
-    private String notes;
-    private String buyer;
+    private String notes; // nullable - returns null if not provided
+    private String buyer; // nullable - returns "Walk-in customer" if not provided
 
     @Column(nullable = false)
     private LocalDate date = LocalDate.now(); // default today

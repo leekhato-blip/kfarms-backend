@@ -4,5 +4,6 @@ public enum InventoryCategory {
     FEED,
     MEDICINE,
     TOOLS,
+    EQUIPMENTS,
     OTHER
 }

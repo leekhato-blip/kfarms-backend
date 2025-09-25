@@ -2,10 +2,13 @@ package com.kfarms.service.impl;
 
 import com.kfarms.dto.SuppliesRequestDto;
 import com.kfarms.dto.SuppliesResponseDto;
+import com.kfarms.entity.Inventory;
+import com.kfarms.entity.InventoryCategory;
 import com.kfarms.entity.Supplies;
 import com.kfarms.exceptions.ResourceNotFoundException;
 import com.kfarms.mapper.SuppliesMapper;
 import com.kfarms.repository.SuppliesRepository;
+import com.kfarms.service.InventoryService;
 import com.kfarms.service.SuppliesService;
 import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.domain.Page;
@@ -23,13 +26,28 @@ import java.util.stream.Collectors;
 @Service
 public class SuppliesServiceImpl implements SuppliesService {
     private final SuppliesRepository repo;
-    public SuppliesServiceImpl(SuppliesRepository repo) {this.repo = repo;}
+    private final InventoryService inventoryService;
+    public SuppliesServiceImpl(SuppliesRepository repo, InventoryService inventoryService) {
+        this.repo = repo;
+        this.inventoryService = inventoryService;
+    }
 
     // CREATE - add new supply item
     @Override
     public SuppliesResponseDto create(SuppliesRequestDto dto) {
         Supplies entity = SuppliesMapper.toEntity(dto);
         Supplies saved = repo.save(entity);
+
+        // auto update inventory if not livestock
+        if (saved.getCategory() != null && !saved.getCategory().name().equalsIgnoreCase("LIVESTOCK")) {
+            inventoryService.adjustStock(
+                    saved.getItemName(),
+                    InventoryCategory.valueOf(saved.getCategory().name()),
+                    saved.getQuantity(),
+                    "units",
+                    "Purchased from" + (entity.getSupplierName() != null ? entity.getSupplierName() : "Unknown supplier")
+            );
+        }
         return SuppliesMapper.toResponseDto(saved);
     }
 

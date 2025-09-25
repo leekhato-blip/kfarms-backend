@@ -16,7 +16,7 @@ public class SalesResponseDto {
     private double unitPrice;
     private double totalPrice;
     private String buyer;
-    private String notes;
+    private String note;
     private LocalDate date;
 
     // audit

@@ -17,7 +17,7 @@ public class SuppliesResponseDto {
     private double unitPrice;
     private double totalPrice;
     private String supplierName;
-    private String notes;
+    private String note;
     private LocalDate date;
 
     private String createdBy;

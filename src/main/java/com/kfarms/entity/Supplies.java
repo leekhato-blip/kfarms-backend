@@ -32,7 +32,7 @@ public class Supplies extends Auditable{
     private double totalPrice; // auto = quantity + unitPrice
 
     private String supplierName;
-    private String notes;
+    private String note;
 
     @Column(nullable = false)
     private LocalDate date = LocalDate.now(); // default today

@@ -36,5 +36,5 @@ public class LivestockRequest {
     @Min(value = 0, message = "Mortality cannot be negative")
     private Integer mortality;           // optional; default 0
 
-    private String notes;
+    private String note;
 }

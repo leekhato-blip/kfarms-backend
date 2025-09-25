@@ -22,5 +22,5 @@ public class Hatch extends Auditable{
     private int femaleCount;
     private double hatchRate;
     private int quantityHatched;
-    private String notes;
+    private String note;
 }

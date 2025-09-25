@@ -30,7 +30,7 @@ public class Sales extends Auditable{
     @Column(nullable = false)
     private double totalPrice;
 
-    private String notes; // nullable - returns null if not provided
+    private String note; // nullable - returns null if not provided
     private String buyer; // nullable - returns "Walk-in customer" if not provided
 
     @Column(nullable = false)

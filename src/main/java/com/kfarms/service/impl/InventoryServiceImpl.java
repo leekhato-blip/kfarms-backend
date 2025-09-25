@@ -4,12 +4,12 @@ import com.kfarms.dto.InventoryRequestDto;
 import com.kfarms.dto.InventoryResponseDto;
 import com.kfarms.entity.Inventory;
 import com.kfarms.entity.InventoryCategory;
+import com.kfarms.entity.Sales;
 import com.kfarms.exceptions.ResourceNotFoundException;
 import com.kfarms.mapper.InventoryMapper;
 import com.kfarms.repository.InventoryRepository;
 import com.kfarms.service.InventoryService;
 import jakarta.persistence.criteria.Predicate;
-import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -39,7 +39,7 @@ public class InventoryServiceImpl implements InventoryService {
 
     // READ - get all inventory items with Pagination and Filters
     @Override
-    public Map<String, Object> getAll(int page, int size, String itemName, String category, LocalDate date) {
+    public Map<String, Object> getAll(int page, int size, String itemName, String category, LocalDate lastUpdated) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("id").descending());
         Specification<Inventory> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
@@ -49,8 +49,8 @@ public class InventoryServiceImpl implements InventoryService {
             if (category != null && !category.isBlank()) {
                 predicates.add(cb.like(cb.lower(root.get("category")), "%" + category.toLowerCase() + "%"));
             }
-            if (date != null) {
-                predicates.add(cb.equal(root.get("lastUpdated"), date));
+            if (lastUpdated != null) {
+                predicates.add(cb.equal(root.get("lastUpdated"), lastUpdated));
             }
             return cb.and(predicates.toArray(new Predicate[0]));
 
@@ -91,6 +91,8 @@ public class InventoryServiceImpl implements InventoryService {
         entity.setCategory(InventoryCategory.valueOf(request.getCategory().toUpperCase()));
         entity.setQuantity(request.getQuantity());
         entity.setUnit(request.getUnit());
+        entity.setLastUpdated(request.getLastUpdated());
+        entity.setNote(request.getNote());
         entity.setUpdatedBy(updateBy);
 
         repo.save(entity);
@@ -127,11 +129,51 @@ public class InventoryServiceImpl implements InventoryService {
         summary.put("quantityByCategory", categoryTotals);
 
         // low stock
-        List<String> lowStock = all.stream()
+        List<Map<String, Object>> lowStock = all.stream()
                 .filter(i -> i.getQuantity() <= i.getMinThreshold())
-                .map(Inventory::getItemName)
+                .map(i -> {
+                    Map<String, Object> m = new HashMap<>();
+                    m.put("itemName", i.getItemName());
+                    m.put("quantity", i.getQuantity());
+                    m.put("threshold", i.getMinThreshold());
+                    return m;
+                })
                 .toList();
         summary.put("lowStockItems", lowStock);
+
+        // last updated
+
+        all.stream()
+                .map(Inventory::getLastUpdated)
+                .filter(Objects::nonNull)
+                .max(LocalDate::compareTo)
+                .ifPresent(last -> summary.put("lastUpdated", last));
         return summary;
+    }
+
+    // Auto update inventory
+    @Override
+    public void adjustStock(String itemName, InventoryCategory category, int quantityChange, String unit, String note){
+        Inventory inventory = repo.findByItemNameAndCategory(itemName, category)
+                .orElseGet(() -> {
+                   Inventory newInventory = new Inventory();
+                   newInventory.setItemName(itemName);
+                   newInventory.setCategory(category);
+                   newInventory.setQuantity(0);
+                   newInventory.setUnit(unit);
+                   newInventory.setNote(note);
+                   return newInventory;
+                });
+
+        // Apply stock adjustment
+        inventory.setQuantity(inventory.getQuantity() + quantityChange);
+        inventory.setLastUpdated(LocalDate.now());
+
+        // Prevent negative stock
+        if (inventory.getQuantity() < 0) {
+            throw new IllegalArgumentException("Insufficient stock for " + itemName);
+        }
+
+        repo.save(inventory);
     }
 }

@@ -15,7 +15,7 @@ public class FeedMapper {
         dto.setBatchType(entity.getBatchType() != null ? entity.getBatchType().name() : null);
         dto.setFeedName(entity.getFeedName());
         dto.setQuantityUsed(entity.getQuantityUsed());
-        dto.setNotes(entity.getNotes());
+        dto.setNote(entity.getNote());
         dto.setDate(entity.getDate());
 
         // AUDITABLE
@@ -34,7 +34,7 @@ public class FeedMapper {
         entity.setBatchId(dto.getBatchId());
         entity.setFeedName(dto.getFeedName());
         entity.setQuantityUsed(dto.getQuantityUsed());
-        entity.setNotes(dto.getNotes());
+        entity.setNote(dto.getNote());
         entity.setDate(dto.getDate() != null ? dto.getDate() : LocalDate.now()); // default today
         return entity;
     }

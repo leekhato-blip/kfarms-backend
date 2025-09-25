@@ -9,6 +9,6 @@ public class FeedRequestDto {
     private Long batchId;
     private  String feedName;
     private Integer quantityUsed;
-    private String notes;
+    private String note;
     private LocalDate date; // nullable
 }

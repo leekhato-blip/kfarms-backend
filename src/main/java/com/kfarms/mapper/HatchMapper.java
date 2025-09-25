@@ -11,7 +11,7 @@ public class HatchMapper {
         dto.setHatchRate(entity.getHatchRate());
         dto.setMaleCount(entity.getMaleCount());
         dto.setFemaleCount(entity.getFemaleCount());
-        dto.setNotes(entity.getNotes());
+        dto.setNote(entity.getNote());
         dto.setCreatedBy(entity.getCreatedBy());
         dto.setUpdatedBy(entity.getUpdatedBy());
         dto.setCreatedAt(entity.getCreatedAt());
@@ -26,7 +26,7 @@ public class HatchMapper {
         entity.setHatchRate(dto.getHatchRate());
         entity.setMaleCount(dto.getMaleCount());
         entity.setFemaleCount(dto.getFemaleCount());
-        entity.setNotes(dto.getNotes());
+        entity.setNote(dto.getNote());
         return entity;
     }
 }

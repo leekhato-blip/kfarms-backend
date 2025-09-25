@@ -4,10 +4,12 @@ import com.kfarms.dto.FeedRequestDto;
 import com.kfarms.dto.FeedResponseDto;
 import com.kfarms.entity.Feed;
 import com.kfarms.entity.FeedBatchType;
+import com.kfarms.entity.InventoryCategory;
 import com.kfarms.exceptions.ResourceNotFoundException;
 import com.kfarms.mapper.FeedMapper;
 import com.kfarms.repository.FeedRepository;
 import com.kfarms.service.FeedService;
+import com.kfarms.service.InventoryService;
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -24,15 +26,28 @@ import java.util.stream.Collector;
 import java.util.stream.Collectors;
 
 @Service
-@RequiredArgsConstructor
+
 public class FeedServiceImpl implements FeedService {
     private final FeedRepository repo;
+    private final InventoryService inventoryService;
+
+    public FeedServiceImpl(FeedRepository repo, InventoryService inventoryService) {
+        this.repo = repo;
+        this.inventoryService = inventoryService;
+    }
 
     // CREATE - add new feed
     @Override
     public FeedResponseDto create(FeedRequestDto dto) {
         Feed entity = FeedMapper.toEntity(dto);
         Feed saved = repo.save(entity);
+        inventoryService.adjustStock(
+                saved.getFeedName(),
+                InventoryCategory.FEED,
+                -saved.getQuantityUsed(),
+                "kg",
+                "Consumed by batch" + saved.getBatchId()
+        );
         return FeedMapper.toResponseDto(saved);
     }
 
@@ -103,7 +118,7 @@ public class FeedServiceImpl implements FeedService {
         entity.setBatchType(FeedBatchType.valueOf(request.getBatchType().toUpperCase()));
         entity.setFeedName(request.getFeedName());
         entity.setBatchId(request.getBatchId());
-        entity.setNotes(request.getNotes());
+        entity.setNote(request.getNote());
         entity.setQuantityUsed(request.getQuantityUsed());
         entity.setUpdatedBy(updatedBy);
 

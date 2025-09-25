@@ -14,8 +14,6 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDate;
 import java.util.Map;
 
-
-// TODO: Add role-based access control to this controller
 @RestController
 @RequestMapping("/api/sales")
 public class SalesController {

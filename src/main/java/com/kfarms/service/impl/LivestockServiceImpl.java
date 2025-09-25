@@ -113,7 +113,7 @@ public class LivestockServiceImpl implements LivestockService {
         entity.setSourceType(request.getSourceType());
         entity.setStartingAgeInWeeks(request.getStartingAgeInWeeks() != null ? request.getStartingAgeInWeeks() : entity.getStartingAgeInWeeks());
         entity.setMortality(request.getMortality() != null ? request.getMortality() : entity.getMortality());
-        entity.setNotes(request.getNotes());
+        entity.setNote(request.getNote());
         entity.setUpdatedBy(updatedBy);
 
         repo.save(entity);

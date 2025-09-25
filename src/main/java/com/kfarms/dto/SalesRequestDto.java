@@ -11,6 +11,6 @@ public class SalesRequestDto {
     private Integer quantity;
     private Double unitPrice;
     private String buyer;
-    private String notes;
+    private String note;
     private LocalDate date; // optional - defaults to today
 }

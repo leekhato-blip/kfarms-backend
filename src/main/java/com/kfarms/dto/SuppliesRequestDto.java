@@ -12,6 +12,6 @@ public class SuppliesRequestDto {
     private int quantity;
     private double unitPrice;
     private String supplierName;
-    private String notes;
+    private String note;
     private LocalDate date; // optional, defaults to today
 }

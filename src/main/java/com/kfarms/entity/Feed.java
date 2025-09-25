@@ -25,7 +25,7 @@ public class Feed extends Auditable{
     private String feedName;
 
     @Column(nullable = true) // explicitly nullable
-    private String notes;
+    private String note;
 
     @Column(nullable = false)
     private Integer quantityUsed;

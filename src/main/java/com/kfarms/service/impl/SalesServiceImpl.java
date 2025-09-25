@@ -2,11 +2,13 @@ package com.kfarms.service.impl;
 
 import com.kfarms.dto.SalesRequestDto;
 import com.kfarms.dto.SalesResponseDto;
+import com.kfarms.entity.InventoryCategory;
 import com.kfarms.entity.Sales;
 import com.kfarms.entity.SalesCategory;
 import com.kfarms.exceptions.ResourceNotFoundException;
 import com.kfarms.mapper.SalesMapper;
 import com.kfarms.repository.SalesRepository;
+import com.kfarms.service.InventoryService;
 import com.kfarms.service.SalesService;
 import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.domain.Page;
@@ -23,13 +25,27 @@ import java.util.stream.Collectors;
 @Service
 public class SalesServiceImpl implements SalesService {
     private final SalesRepository repo;
-    public SalesServiceImpl(SalesRepository repo){this.repo = repo;}
+    private final InventoryService inventoryService;
+    public SalesServiceImpl(SalesRepository repo, InventoryService inventoryService){
+        this.repo = repo;
+        this.inventoryService = inventoryService;
+    }
 
     // CREATE - add a new sale item
     @Override
     public SalesResponseDto create(SalesRequestDto dto) {
         Sales entity = SalesMapper.toEntity(dto);
         Sales saved = repo.save(entity);
+        // Auto update inventory if NOT LIVESTOCK
+        if (entity.getCategory() != SalesCategory.LIVESTOCK && entity.getCategory() != SalesCategory.FISH) {
+            inventoryService.adjustStock(
+                    entity.getItemName(),
+                    InventoryCategory.valueOf(entity.getCategory().name()),
+                    -entity.getQuantity(),
+                    "units",
+                    "Sold to " + (entity.getBuyer() != null ? entity.getBuyer() : "Walk-in customer")
+            );
+        }
         return SalesMapper.toResponseDto(saved);
     }
 

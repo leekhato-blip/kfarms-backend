@@ -33,7 +33,7 @@ public class Livestock extends Auditable{
     private LocalDate arrivalDate;
 
     @Column(nullable = true) // explicitly nullable
-    private String notes;
+    private String note;
 
     // Initial age when arriving (weeks). 0 for FARM_BIRTH
     private int startingAgeInWeeks;

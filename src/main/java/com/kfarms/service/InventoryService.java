@@ -9,9 +9,10 @@ import java.util.Map;
 
 public interface InventoryService {
     InventoryResponseDto create(InventoryRequestDto inventory);
-    Map<String, Object> getAll(int page, int size, String itemName, String category, LocalDate date);
+    Map<String, Object> getAll(int page, int size, String itemName, String category, LocalDate lastUpdated);
     InventoryResponseDto getById(Long id);
     InventoryResponseDto update(Long id, InventoryRequestDto request, String updatedBy);
     void delete(Long id);
     Map<String, Object> getSummary();
+    void adjustStock(String itemName, InventoryCategory category, int quantityChange, String unit, String note);
 }

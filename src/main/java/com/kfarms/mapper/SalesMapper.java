@@ -18,7 +18,7 @@ public class SalesMapper {
         dto.setTotalPrice(entity.getTotalPrice());
         dto.setQuantity(entity.getQuantity());
         dto.setDate(entity.getDate());
-        dto.setNotes(entity.getNotes());
+        dto.setNote(entity.getNote());
 
         // audit
         dto.setCreatedBy(entity.getCreatedBy());
@@ -39,7 +39,7 @@ public class SalesMapper {
 
         entity.setQuantity(dto.getQuantity());
         entity.setUnitPrice(dto.getUnitPrice());
-        entity.setNotes(dto.getNotes());
+        entity.setNote(dto.getNote());
 
         // set Category (TYPE)
         if (dto.getCategory() != null) {

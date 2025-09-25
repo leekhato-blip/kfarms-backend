@@ -20,7 +20,7 @@ public class LivestockResponse {
     private int ageInWeeks; // derived, not stored
     private Integer mortality;
 
-    private String notes;
+    private String note;
 
     // audit
     private String createdBy;

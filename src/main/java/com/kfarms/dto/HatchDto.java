@@ -14,7 +14,7 @@ public class HatchDto {
     private int femaleCount;
     private double hatchRate;
     private int quantityHatched;
-    private String notes;
+    private String note;
 
     private String createdBy;
     private String updatedBy;

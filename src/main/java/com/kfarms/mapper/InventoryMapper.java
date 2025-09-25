@@ -17,6 +17,7 @@ public class InventoryMapper {
         dto.setCategory(entity.getCategory() != null ? entity.getCategory().name() : null);
         dto.setQuantity(entity.getQuantity());
         dto.setUnit(entity.getUnit());
+        dto.setNote(entity.getNote());
         dto.setMinThreshold(entity.getMinThreshold());
         dto.setLastUpdated(entity.getLastUpdated());
 

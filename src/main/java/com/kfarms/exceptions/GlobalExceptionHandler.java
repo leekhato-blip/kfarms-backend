@@ -3,6 +3,8 @@ package com.kfarms.exceptions;
 import com.kfarms.entity.ApiResponse;
 import jakarta.persistence.EntityNotFoundException;
 import jdk.dynalink.linker.MethodHandleTransformer;
+import org.hibernate.exception.ConstraintViolationException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -38,9 +40,25 @@ public class GlobalExceptionHandler  {
                 .body(new ApiResponse<>(false, ex.getMessage(), null));
     }
 
+    // Handle database constraint violations (like unique itemName + category)
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ApiResponse<String>> handleDataIntegrityViolation(DataIntegrityViolationException ex) {
+        String message = "This item already exists in the given category.";
+        return ResponseEntity.status(HttpStatus.CONFLICT) // 409 conflict
+                .body(new ApiResponse<>(false, message, null));
+    }
+
+    // (Optional) Handle Hibernate ConstraintViolationException specifically
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<ApiResponse<String>> handleConstraintViolation(ConstraintViolationException ex) {
+        String message = "Database constraint violated: " + ex.getConstraintName();
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new ApiResponse<>(false, message, null));
+    }
+
     // Access denied
     @ExceptionHandler(AccessDeniedException.class)
-    public ResponseEntity<ApiResponse<String>> handeleAccessDenied(AccessDeniedException ex){
+    public ResponseEntity<ApiResponse<String>> handleAccessDenied(AccessDeniedException ex){
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(new ApiResponse<>(false, "You are not authorized to perform this action", null));
     }
@@ -63,7 +81,7 @@ public class GlobalExceptionHandler  {
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<ApiResponse<String>> handleRuntime(RuntimeException ex){
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ApiResponse<>(false, "An unexpected error occured: " + ex.getMessage(), null));
+                .body(new ApiResponse<>(false, "An unexpected error occurred: " + ex.getMessage(), null));
     }
 
     // Resource not found

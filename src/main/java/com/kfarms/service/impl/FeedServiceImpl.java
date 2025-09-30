@@ -41,6 +41,8 @@ public class FeedServiceImpl implements FeedService {
     public FeedResponseDto create(FeedRequestDto dto) {
         Feed entity = FeedMapper.toEntity(dto);
         Feed saved = repo.save(entity);
+
+        // auto update inventory after create
         inventoryService.adjustStock(
                 saved.getFeedName(),
                 InventoryCategory.FEED,

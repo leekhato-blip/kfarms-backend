@@ -2,7 +2,7 @@ package com.kfarms.controller;
 
 import com.kfarms.dto.HatchDto;
 import com.kfarms.entity.ApiResponse;
-import com.kfarms.entity.Hatch;
+import com.kfarms.entity.FishHatch;
 import com.kfarms.mapper.HatchMapper;
 import com.kfarms.service.HatchService;
 import org.springframework.http.HttpStatus;
@@ -14,7 +14,7 @@ import java.util.stream.Collectors;
 
 // TODO: Add role-based access control to this controller
 @RestController
-@RequestMapping("/api/Hatch")
+@RequestMapping("/api/hatch")
 public class HatchController {
     private final HatchService service;
     public HatchController(HatchService service){
@@ -23,10 +23,10 @@ public class HatchController {
 
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<HatchDto>> getById(@PathVariable Long id){
-        Hatch hatch = service.getById(id);
+        FishHatch fishHatch = service.getById(id);
         if (id != null){
             return ResponseEntity.ok(
-                    new ApiResponse<>(true, "Hatch record fetched", HatchMapper.toDto(hatch))
+                    new ApiResponse<>(true, "FishHatch record fetched", HatchMapper.toDto(fishHatch))
             );
         } else {
             return ResponseEntity.notFound().build();
@@ -40,16 +40,16 @@ public class HatchController {
                 .collect(Collectors.toList());
 
         return ResponseEntity.ok(
-                new ApiResponse<>(true, "All Hatch record fetched successfully", dtos)
+                new ApiResponse<>(true, "All FishHatch record fetched successfully", dtos)
         );
     }
 
     @PostMapping
     public ResponseEntity<ApiResponse<HatchDto>> create(@RequestBody HatchDto dto){
-        Hatch hatch = service.save(HatchMapper.toEntity(dto));
+        FishHatch fishHatch = service.save(HatchMapper.toEntity(dto));
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(
-                        new ApiResponse<>(true, "Hatch record saved successfully", HatchMapper.toDto(hatch))
+                        new ApiResponse<>(true, "FishHatch record saved successfully", HatchMapper.toDto(fishHatch))
                 );
     }
 
@@ -57,7 +57,7 @@ public class HatchController {
     public ResponseEntity<ApiResponse<String>> delete(@PathVariable Long id){
         service.delete(id);
         return ResponseEntity.ok(
-                new ApiResponse<>(true, "Hatch record deleted successfully", null)
+                new ApiResponse<>(true, "FishHatch record deleted successfully", null)
         );
     }
 }

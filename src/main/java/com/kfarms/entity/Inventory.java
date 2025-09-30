@@ -7,7 +7,10 @@ import java.time.LocalDate;
 import java.util.Date;
 
 @Entity
-@Table(name = "Inventory")
+@Table(
+        name = "Inventory",
+        uniqueConstraints = @UniqueConstraint(columnNames = {"itemName", "category"})
+)
 @Data
 @RequiredArgsConstructor
 public class Inventory extends Auditable{

@@ -45,7 +45,8 @@ public class SuppliesServiceImpl implements SuppliesService {
                     InventoryCategory.valueOf(saved.getCategory().name()),
                     saved.getQuantity(),
                     "units",
-                    "Purchased from" + (entity.getSupplierName() != null ? entity.getSupplierName() : "Unknown supplier")
+                    "Purchased from " + (entity.getSupplierName() != null ? entity.getSupplierName() : "Unknown supplier")
+                     + (entity.getNote() != null ? " | Note: " + entity.getNote() : "")
             );
         }
         return SuppliesMapper.toResponseDto(saved);

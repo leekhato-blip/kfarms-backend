@@ -6,6 +6,8 @@ import com.kfarms.entity.Livestock;
 import com.kfarms.entity.SourceType;
 
 public class LivestockMapper {
+
+    // Convert DTO → Entity
     public static Livestock toEntity(LivestockRequest dto){
         Livestock entity = new Livestock();
         entity.setBatchName(dto.getBatchName());

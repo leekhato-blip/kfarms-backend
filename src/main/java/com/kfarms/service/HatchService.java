@@ -1,12 +1,12 @@
 package com.kfarms.service;
 
-import com.kfarms.entity.Hatch;
+import com.kfarms.entity.FishHatch;
 
 import java.util.List;
 
 public interface HatchService {
-    List<Hatch> getAll();
-    Hatch getById(Long id);
-    Hatch save(Hatch hatch);
+    List<FishHatch> getAll();
+    FishHatch getById(Long id);
+    FishHatch save(FishHatch fishHatch);
     void delete(Long id);
 }

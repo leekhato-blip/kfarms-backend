@@ -10,7 +10,7 @@ import java.time.LocalDate;
 @Table(name = "HatchRecord")
 @AllArgsConstructor
 @NoArgsConstructor
-public class Hatch extends Auditable{
+public class FishHatch extends Auditable{
     @Id
     @GeneratedValue private Long id;
 

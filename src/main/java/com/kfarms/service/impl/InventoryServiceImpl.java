@@ -115,7 +115,7 @@ public class InventoryServiceImpl implements InventoryService {
         List<Inventory> all = repo.findAll();
         Map<String, Object> summary = new HashMap<>();
 
-        // Total Inventory Record
+        // Total Inventory record
         summary.put("totalInventoryItems", all.size());
 
         // Total Quantity
@@ -142,7 +142,6 @@ public class InventoryServiceImpl implements InventoryService {
         summary.put("lowStockItems", lowStock);
 
         // last updated
-
         all.stream()
                 .map(Inventory::getLastUpdated)
                 .filter(Objects::nonNull)
@@ -157,7 +156,7 @@ public class InventoryServiceImpl implements InventoryService {
         Inventory inventory = repo.findByItemNameAndCategory(itemName, category)
                 .orElseGet(() -> {
                    Inventory newInventory = new Inventory();
-                   newInventory.setItemName(itemName);
+                   newInventory.setItemName(itemName.trim());
                    newInventory.setCategory(category);
                    newInventory.setQuantity(0);
                    newInventory.setUnit(unit);

@@ -42,7 +42,7 @@ public class InventoryController {
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(required = false) String itemName,
             @RequestParam(required = false) String category,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)LocalDate lastUpdated
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate lastUpdated
             ){
         Map<String, Object> response = service.getAll(page, size, itemName, category, lastUpdated);
         return ResponseEntity.ok(

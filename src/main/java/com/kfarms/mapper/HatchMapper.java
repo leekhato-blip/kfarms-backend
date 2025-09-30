@@ -1,10 +1,10 @@
 package com.kfarms.mapper;
 
 import com.kfarms.dto.HatchDto;
-import com.kfarms.entity.Hatch;
+import com.kfarms.entity.FishHatch;
 
 public class HatchMapper {
-    public static HatchDto toDto(Hatch entity){
+    public static HatchDto toDto(FishHatch entity){
         HatchDto dto = new HatchDto();
         dto.setId(entity.getId());
         dto.setHatchDate(entity.getHatchDate());
@@ -19,8 +19,8 @@ public class HatchMapper {
         return dto;
     }
 
-    public static Hatch toEntity(HatchDto dto){
-        Hatch entity = new Hatch();
+    public static FishHatch toEntity(HatchDto dto){
+        FishHatch entity = new FishHatch();
         entity.setId(dto.getId());
         entity.setHatchDate(dto.getHatchDate());
         entity.setHatchRate(dto.getHatchRate());

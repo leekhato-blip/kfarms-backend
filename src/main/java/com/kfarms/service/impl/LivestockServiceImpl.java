@@ -106,19 +106,46 @@ public class LivestockServiceImpl implements LivestockService {
                 .orElseThrow(() -> new ResourceNotFoundException("Livestock", "id", id));
 
         // Update fields from request
-        entity.setBatchName(request.getBatchName());
-        entity.setQuantity(request.getQuantity());
-        entity.setType(request.getType());
-        entity.setArrivalDate(request.getArrivalDate());
-        entity.setSourceType(request.getSourceType());
+        if (request.getBatchName() != null) {
+            entity.setBatchName(request.getBatchName());
+        }
+        if (request.getType() != null) {
+            entity.setType(request.getType());
+        }
+        if (request.getArrivalDate() != null) {
+            entity.setArrivalDate(request.getArrivalDate());
+        }
+        if (request.getSourceType() != null) {
+            entity.setSourceType(request.getSourceType());
+        }
         entity.setStartingAgeInWeeks(request.getStartingAgeInWeeks() != null ? request.getStartingAgeInWeeks() : entity.getStartingAgeInWeeks());
-        entity.setMortality(request.getMortality() != null ? request.getMortality() : entity.getMortality());
-        entity.setNote(request.getNote());
+        if (request.getNote() != null) {
+            entity.setNote(request.getNote());
+        }
         entity.setUpdatedBy(updatedBy);
+
+        // Handle quantity & mortality smartly
+        if (request.getMortality() != null && request.getMortality() > 0) {
+            int currentMortality = entity.getMortality() != null ? entity.getMortality() : 0;
+            int currentQty = (entity.getCurrentStock() != null) ? entity.getCurrentStock() : 0;
+
+            if (request.getMortality() > currentQty) {
+                throw new IllegalArgumentException("Mortality cannot exceed current livestock quantity");
+            }
+
+            int newMortality = currentMortality + request.getMortality();
+            entity.setMortality(newMortality);
+            entity.setCurrentStock(currentQty - request.getMortality());
+        } else if (request.getCurrentStock() != null) {
+            // allow updating quantity directly (e.g manual correction)
+            entity.setCurrentStock(request.getCurrentStock());
+        }
 
         repo.save(entity);
         return LivestockMapper.toResponse(entity);
     }
+
+
 
     // DELETE - delete livestock by ID
     @Override
@@ -129,39 +156,31 @@ public class LivestockServiceImpl implements LivestockService {
         repo.deleteById(id);
     };
 
-    // SEARCH
-//    @Override
-//    public List<LivestockResponse> search(String batchName, String type, LocalDate arrivalDate){
-//        List<Livestock> list = repo.findAll(); // start with all
-//        if(batchName != null && !batchName.isEmpty()){
-//            list = list.stream()
-//                    .filter(l -> l.getBatchName().toLowerCase().contains(batchName.toLowerCase()))
-//                    .toList();
-//        }
-//        if(type != null && !type.isEmpty()){
-//            list = list.stream()
-//                    .filter(l -> l.getType().name().equalsIgnoreCase(type))
-//                    .toList();
-//        }
-//        if(arrivalDate != null){
-//            list = list.stream()
-//                    .filter(l -> arrivalDate.equals(l.getArrivalDate()))
-//                    .toList();
-//        }
-//        return list.stream().map(LivestockMapper::toResponse).toList();
-//    }
-
     // SUMMARY
     @Override
     public Map<String, Object> getSummary(){
         List<Livestock> all = repo.findAll();
         Map<String, Object> summary = new HashMap<>();
-        summary.put("totalLivestock", all.size());
-        summary.put("totalMortality", all.stream().mapToInt(l -> l.getMortality() != null ? l.getMortality() : 0).sum());
 
-        // count by type
+        int totalQuantity = all.stream()
+                .mapToInt(l -> l.getCurrentStock() != null ? l.getCurrentStock() : 0)
+                .sum();
+        int totalMortality = all.stream().mapToInt(l -> l.getMortality() != null ? l.getMortality() : 0).sum();
+
+        // Total livestock batches
+        summary.put("totalLivestockBatches", all.size());
+        // Total number of Mortality
+        summary.put("totalMortality", totalMortality);
+        // total number of livestock alive
+        summary.put("totalQuantityAlive", totalQuantity);
+
+
+        // count by type (alive only)
         Map<String, Long> countByType = all.stream()
-                .collect(Collectors.groupingBy(l -> l.getType().name(), Collectors.counting()));
+                .collect(Collectors.groupingBy(
+                        l -> l.getType().name(),
+                        Collectors.summingLong(l -> l.getCurrentStock() != null ? l.getCurrentStock() : 0)
+                ));
         summary.put("countByType", countByType);
 
         return summary;

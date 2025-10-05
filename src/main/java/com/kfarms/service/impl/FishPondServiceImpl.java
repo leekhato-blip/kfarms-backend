@@ -121,12 +121,32 @@ public class FishPondServiceImpl implements FishPondService {
     public FishPondResponseDto update(Long id, FishPondRequestDto request, String updatedBy){
         FishPond entity = repo.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("FishPond", "id", id));
-        entity.setPondName(request.getPondName());
-        entity.setCurrentStock(request.getCurrentStock());
-        entity.setCapacity(request.getCapacity());
-        entity.setMortalityCount(request.getMortalityCount());
-        entity.setLastWaterChange(request.getLastWaterChange());
-        entity.setNote(request.getNote());
+
+        // Update only non-null fields
+        if (request.getPondName() != null) {
+            entity.setPondName(request.getPondName());
+        }
+        if (request.getCapacity() != null) {
+            entity.setCapacity(request.getCapacity());
+        }
+        if (request.getLastWaterChange() != null) {
+            entity.setLastWaterChange(request.getLastWaterChange());
+        }
+        if (request.getNote() != null) {
+            entity.setNote(request.getNote());
+        }
+
+        // Handle mortality -> automatically reduce stock
+        if (request.getMortalityCount() != null) {
+            int mortality = request.getMortalityCount();
+            entity.setMortalityCount(entity.getMortalityCount() + mortality);
+            entity.setCurrentStock(Math.max(entity.getCurrentStock() - mortality, 0));
+        }
+
+        // Update current stock only if explicitly sent (and not already adjusted by mortality
+        if (request.getCurrentStock() != null && request.getMortalityCount() ==  null) {
+            entity.setCurrentStock(request.getCurrentStock());
+        }
 
         // handle enums safely
         if (request.getStatus() != null && !request.getStatus().isBlank()) {
@@ -172,11 +192,19 @@ public class FishPondServiceImpl implements FishPondService {
         // Total FishPond record
         summary.put("totalFishPonds", all.size());
         // Total quantity
-        summary.put("totalFishes", all.stream().mapToInt(FishPond::getCurrentStock).sum());
+        summary.put("totalFishes", all.stream()
+                .mapToInt(f -> Optional.ofNullable(f.getCurrentStock()).orElse(0))
+                .sum());
+
         // Total capacity
-        summary.put("totalCapacity", all.stream().mapToInt(FishPond::getCapacity).sum());
+        summary.put("totalQuantity", all.stream()
+                .mapToInt(f -> Optional.ofNullable(f.getCapacity()).orElse(0))
+                .sum());
+
         // Total Mortality
-        summary.put("totalMortality", all.stream().mapToInt(FishPond::getMortalityCount).sum());
+        summary.put("totalMortality", all.stream()
+                .mapToInt(f -> Optional.ofNullable(f.getMortalityCount()).orElse(0))
+                .sum());
 
         // status breakdown
         Map<String, Long> countByStatus = all.stream()
@@ -196,7 +224,6 @@ public class FishPondServiceImpl implements FishPondService {
                 .filter(Objects::nonNull)
                 .max(LocalDate::compareTo)
                 .ifPresent(last -> summary.put("lastUpdated", last));
-
         return summary;
     }
 

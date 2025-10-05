@@ -11,7 +11,7 @@ import java.time.LocalDateTime;
 public class LivestockResponse {
     private Long id;
     private String batchName;
-    private int quantity;
+    private Integer currentStock;
     private LivestockType type;
     private LocalDate arrivalDate;
 

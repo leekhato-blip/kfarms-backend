@@ -18,12 +18,12 @@ public class LivestockRequest {
     private String batchName;
 
     @Min(value = 1, message = "Quantity must be greater than 0")
-    private int quantity;
+    private Integer currentStock;
 
     @NotNull(message = "Livestock type cannot be null")
     private LivestockType type;
 
-    @NotNull(message = "Arrival date cannot be null")
+
     @FutureOrPresent(message = "Arrival date cannot be in the past")
     private LocalDate arrivalDate;
 

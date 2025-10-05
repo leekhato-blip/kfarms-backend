@@ -4,10 +4,6 @@ package com.kfarms.entity;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
-import org.springframework.data.annotation.CreatedBy;
-import org.springframework.data.annotation.LastModifiedBy;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.LocalDate;
@@ -15,7 +11,12 @@ import java.time.temporal.ChronoUnit;
 
 
 @Entity
-@Table(name = "livestock")
+@Table(
+        name = "livestock",
+        uniqueConstraints = {
+                @UniqueConstraint(columnNames = {"batchName"})
+        }
+)
 @Data
 @RequiredArgsConstructor
 @EntityListeners(AuditingEntityListener.class)
@@ -24,13 +25,15 @@ public class Livestock extends Auditable{
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(nullable = false, unique = true)
     private String batchName;
-    private int quantity;
+    private Integer currentStock;
 
     @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
     private LivestockType type; // LAYER, DUCK, FOWL, etc.
 
-    private LocalDate arrivalDate;
+    private LocalDate arrivalDate = LocalDate.now();
 
     @Column(nullable = true) // explicitly nullable
     private String note;

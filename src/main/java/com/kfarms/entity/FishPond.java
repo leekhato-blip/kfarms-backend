@@ -6,7 +6,12 @@ import lombok.*;
 import java.time.LocalDate;
 
 @Entity
-@Table(name = "FishPond")
+@Table(
+        name = "FishPond",
+        uniqueConstraints = {
+                @UniqueConstraint(columnNames = {"pondName"})
+        }
+)
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
@@ -22,8 +27,8 @@ public class FishPond extends Auditable{
     private FishPondType pondType; // HATCHING, GROW_OUT, BROODSTOCK, HOLDING
 
     // STOCK INFO
-    private Integer currentStock; // number of fish currently in pond
-    private Integer capacity; // maximum number of fish
+    private Integer currentStock = 0; // number of fish currently in pond
+    private Integer capacity = 0; // maximum number of fish
     private Integer mortalityCount = 0; // number of deaths recorded (total)
 
     // GROWTH/FEEDING

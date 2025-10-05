@@ -84,7 +84,7 @@ public class InventoryController {
     // DELETE - delete an inventory item by ID
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<ApiResponse<String>> delete(@PathVariable Long id){
+    public ResponseEntity<ApiResponse<String>> delete(@PathVariable Long id) {
         service.delete(id);
         return ResponseEntity.ok(
                 new ApiResponse<>(true, "Inventory record deleted successfully", null)

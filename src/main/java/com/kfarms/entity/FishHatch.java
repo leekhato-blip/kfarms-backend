@@ -2,24 +2,29 @@ package com.kfarms.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.apache.catalina.users.GenericRole;
 
 import java.time.LocalDate;
 
 @Data
 @Entity
-@Table(name = "HatchRecord")
+@Table(name = "fish_hatch_records")
 @AllArgsConstructor
 @NoArgsConstructor
 public class FishHatch extends Auditable{
     @Id
-    @GeneratedValue private Long id;
+    @GeneratedValue (strategy = GenerationType.IDENTITY)
+    private Long id;
 
-    @ManyToOne
-    private FishPond fishPond;
+    @ManyToOne(optional = false)
+    @JoinColumn(name = "fish_pond_id", nullable = false)
+    private FishPond pond;
 
-    private LocalDate hatchDate;
+
     private int maleCount;
     private int femaleCount;
+
+    private LocalDate hatchDate = LocalDate.now();
     private double hatchRate;
     private int quantityHatched;
     private String note;

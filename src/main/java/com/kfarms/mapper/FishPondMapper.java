@@ -57,7 +57,7 @@ public class FishPondMapper {
             entity.setStatus(FishPondStatus.valueOf(dto.getStatus().trim().toUpperCase()));
         }
 
-        // SELF-MANAGE LOGIC must come after setting status
+        // SELF-MANAGE LOGIC comes after setting status
         if (entity.getStatus() == FishPondStatus.EMPTY) {
             entity.setCurrentStock(0);
             entity.setMortalityCount(0);

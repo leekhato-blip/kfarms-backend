@@ -12,7 +12,7 @@ import java.time.LocalDate;
 
 @Data
 
-public class LivestockRequest {
+public class LivestockRequestDto {
     @NotNull(message = "Batch name cannot be null")
     @Size(min = 1, max = 50, message = "Batch name should have a length between 1 and 50 characters")
     private String batchName;

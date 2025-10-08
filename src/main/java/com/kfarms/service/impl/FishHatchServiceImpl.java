@@ -63,7 +63,9 @@ public class FishHatchServiceImpl implements FishHatchService {
                 .orElseThrow(() -> new ResourceNotFoundException("FishPond", "id", request.getPondId()));
 
         entity.setPond(pond);
-        entity.setHatchDate(request.getHatchDate());
+        if (request.getHatchDate() != null) {
+            entity.setHatchDate(request.getHatchDate());
+        }
         entity.setMaleCount(request.getMaleCount());
         entity.setFemaleCount(request.getFemaleCount());
         entity.setQuantityHatched(request.getQuantityHatched());

@@ -2,6 +2,7 @@ package com.kfarms.service.impl;
 
 import com.kfarms.dto.FishPondRequestDto;
 import com.kfarms.dto.FishPondResponseDto;
+import com.kfarms.dto.StockAdjustmentRequestDto;
 import com.kfarms.entity.FishFeedingSchedule;
 import com.kfarms.entity.FishPond;
 import com.kfarms.entity.FishPondStatus;
@@ -225,6 +226,19 @@ public class FishPondServiceImpl implements FishPondService {
                 .max(LocalDate::compareTo)
                 .ifPresent(last -> summary.put("lastUpdated", last));
         return summary;
+    }
+
+    // ADJUST stock
+    @Override
+    public FishPondResponseDto adjustStock(Long id, StockAdjustmentRequestDto request, String updatedBy) {
+        FishPond pond = repo.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("FishPond", "id", id));
+
+        pond.adjustStock(request.getQuantity(), request.getReason());
+        pond.setUpdatedBy(updatedBy);
+
+        repo.save(pond);
+        return FishPondMapper.toResponseDto(pond);
     }
 
     // HELPER METHOD: calculate next water change dynamically

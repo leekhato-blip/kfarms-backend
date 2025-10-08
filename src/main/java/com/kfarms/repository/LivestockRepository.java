@@ -15,16 +15,16 @@ import java.time.LocalDate;
 @Repository
 public interface LivestockRepository extends JpaRepository<Livestock, Long>, JpaSpecificationExecutor<Livestock> {
 
-    @Query("""
-    SELECT l FROM Livestock l
-    WHERE (:batchName IS NULL OR LOWER(l.batchName) LIKE LOWER(CONCAT('%', :batchName, '%')))
-      AND (:type IS NULL OR l.type = :type)
-      AND (:arrivalDate IS NULL OR l.arrivalDate = :arrivalDate)
-    """)
-    Page<Livestock> findByFilters(
-            @Param("batchName") String batchName,
-            @Param("type") LivestockType type,
-            @Param("arrivalDate")LocalDate arrivalDate,
-            Pageable pageable
-            );
+//    @Query("""
+//    SELECT l FROM Livestock l
+//    WHERE (:batchName IS NULL OR LOWER(l.batchName) LIKE LOWER(CONCAT('%', :batchName, '%')))
+//      AND (:type IS NULL OR l.type = :type)
+//      AND (:arrivalDate IS NULL OR l.arrivalDate = :arrivalDate)
+//    """)
+//    Page<Livestock> findByFilters(
+//            @Param("batchName") String batchName,
+//            @Param("type") LivestockType type,
+//            @Param("arrivalDate")LocalDate arrivalDate,
+//            Pageable pageable
+//            );
 }

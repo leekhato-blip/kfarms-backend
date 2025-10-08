@@ -1,7 +1,8 @@
 package com.kfarms.mapper;
 
-import com.kfarms.dto.LivestockRequest;
-import com.kfarms.dto.LivestockResponse;
+
+import com.kfarms.dto.LivestockRequestDto;
+import com.kfarms.dto.LivestockResponseDto;
 import com.kfarms.entity.Livestock;
 import com.kfarms.entity.LivestockType;
 import com.kfarms.entity.SourceType;
@@ -11,7 +12,7 @@ import java.time.LocalDate;
 public class LivestockMapper {
 
     // Convert DTO → Entity
-    public static Livestock toEntity(LivestockRequest request) {
+    public static Livestock toEntity(LivestockRequestDto request) {
         Livestock entity = new Livestock();
 
         // Batch name (mandatory)
@@ -52,8 +53,8 @@ public class LivestockMapper {
         return entity;
     }
 
-    public static LivestockResponse toResponse(Livestock entity){
-        LivestockResponse response = new LivestockResponse();
+    public static LivestockResponseDto toResponseDto(Livestock entity){
+        LivestockResponseDto response = new LivestockResponseDto();
         response.setId(entity.getId());
         response.setBatchName(entity.getBatchName() != null ? entity.getBatchName().trim().toUpperCase() : null);
         response.setCurrentStock(entity.getCurrentStock());

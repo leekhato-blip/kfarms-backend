@@ -11,7 +11,7 @@ public class FishHatchMapper {
     public static FishHatchResponseDto toResponseDto(FishHatch entity){
         FishHatchResponseDto dto = new FishHatchResponseDto();
         dto.setId(entity.getId());
-        dto.setHatchDate(entity.getHatchDate());
+        dto.setHatchDate(entity.getHatchDate() != null ? dto.getHatchDate() : LocalDate.now());
         dto.setMaleCount(entity.getMaleCount());
         dto.setFemaleCount(entity.getFemaleCount());
         dto.setQuantityHatched(entity.getQuantityHatched());
@@ -41,10 +41,10 @@ public class FishHatchMapper {
 
         // Calculate hatch rate
         int totalParents = request.getMaleCount() + request.getFemaleCount();
+        double hatchRate = 0.0;
         if (totalParents > 0) {
-            entity.setHatchRate((double) request.getQuantityHatched() / totalParents * 100);
-        } else {
-            entity.setHatchRate(0.0);
+            hatchRate = (double) request.getQuantityHatched() / totalParents;
+            hatchRate = Math.round(hatchRate * 100.0) / 100.0; // round to 2 dp
         }
 
         entity.setNote(request.getNote());

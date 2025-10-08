@@ -57,4 +57,20 @@ public class FishPond extends Auditable{
     @Transient
     private LocalDate nextWaterChange;
 
+    // adjust stock logic
+    public void adjustStock(int quantity, StockAdjustmentReason reason) {
+        if (quantity == 0 || reason == null) return;
+
+        if (this.currentStock == null) this.currentStock = 0;
+
+        switch (reason) {
+            case PURCHASE, TRANSFER_IN, OTHER -> this.currentStock += quantity;
+            case SALE, CONSUMPTION, TRANSFER_OUT -> {
+                int newStock = this.currentStock - quantity;
+                this.currentStock = Math.max(newStock, 0);
+            }
+            default -> throw new IllegalArgumentException("Unknown stock adjustment reason: " + reason);
+        }
+    }
+
 }

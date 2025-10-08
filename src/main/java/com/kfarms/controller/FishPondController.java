@@ -2,6 +2,7 @@ package com.kfarms.controller;
 
 import com.kfarms.dto.FishPondRequestDto;
 import com.kfarms.dto.FishPondResponseDto;
+import com.kfarms.dto.StockAdjustmentRequestDto;
 import com.kfarms.entity.ApiResponse;
 import com.kfarms.entity.FishPond;
 import com.kfarms.mapper.FishPondMapper;
@@ -11,6 +12,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
@@ -106,6 +108,22 @@ public class FishPondController {
         Map<String, Object> summary = service.getSummary();
         return ResponseEntity.ok(
                 new ApiResponse<>(true, "FishPond summary fetched", summary)
+        );
+    }
+
+    // Adjust stock
+    @PostMapping("/{id}/adjust-stock")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<FishPondResponseDto>> adjustStock(
+            @PathVariable Long id,
+            @RequestBody StockAdjustmentRequestDto request
+    ) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String updatedBy = auth.getName();
+        FishPondResponseDto response = service.adjustStock(id, request, updatedBy);
+
+        return ResponseEntity.ok(
+                new ApiResponse<>(true, "Stock adjusted successfully", response)
         );
     }
 }

@@ -8,7 +8,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Data
-public class LivestockResponse {
+public class LivestockResponseDto {
     private Long id;
     private String batchName;
     private Integer currentStock;

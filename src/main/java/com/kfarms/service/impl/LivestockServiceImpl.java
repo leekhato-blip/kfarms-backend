@@ -1,7 +1,9 @@
 package com.kfarms.service.impl;
 
-import com.kfarms.dto.LivestockRequest;
-import com.kfarms.dto.LivestockResponse;
+
+import com.kfarms.dto.LivestockRequestDto;
+import com.kfarms.dto.LivestockResponseDto;
+import com.kfarms.dto.StockAdjustmentRequestDto;
 import com.kfarms.entity.Livestock;
 import com.kfarms.entity.LivestockType;
 import com.kfarms.exceptions.ResourceNotFoundException;
@@ -28,11 +30,11 @@ public class LivestockServiceImpl implements LivestockService {
 
     // CREATE - create Livestock
     @Override
-    public  LivestockResponse create(LivestockRequest request, String createBy){
+    public  LivestockResponseDto create(LivestockRequestDto request, String createBy){
         Livestock entity = LivestockMapper.toEntity(request);
         entity.setCreatedBy(createBy);
         repo.save(entity);
-        return LivestockMapper.toResponse(entity);
+        return LivestockMapper.toResponseDto(entity);
     }
 
     // READ - get all Livestock (Pagination and Filtering)
@@ -73,9 +75,9 @@ public class LivestockServiceImpl implements LivestockService {
         };
         Page<Livestock> livestockPage = repo.findAll(spec, pageable);
 
-        List<LivestockResponse> items = livestockPage.getContent()
+        List<LivestockResponseDto> items = livestockPage.getContent()
                 .stream()
-                .map(LivestockMapper::toResponse)
+                .map(LivestockMapper::toResponseDto)
                 .toList();
 
         Map<String, Object> result = new HashMap<>();
@@ -93,15 +95,15 @@ public class LivestockServiceImpl implements LivestockService {
 
     // READ - get Livestock by ID
     @Override
-    public LivestockResponse getById(Long id){
+    public LivestockResponseDto getById(Long id){
         Livestock entity = repo.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Livestock", "id", id));
-        return LivestockMapper.toResponse(entity);
+        return LivestockMapper.toResponseDto(entity);
     }
 
     // UPDATE - update existing Livestock
     @Override
-    public LivestockResponse update(Long id,  LivestockRequest request, String updatedBy){
+    public LivestockResponseDto update(Long id, LivestockRequestDto request, String updatedBy){
         Livestock entity = repo.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Livestock", "id", id));
 
@@ -142,7 +144,7 @@ public class LivestockServiceImpl implements LivestockService {
         }
 
         repo.save(entity);
-        return LivestockMapper.toResponse(entity);
+        return LivestockMapper.toResponseDto(entity);
     }
 
 
@@ -185,5 +187,19 @@ public class LivestockServiceImpl implements LivestockService {
 
         return summary;
     }
+
+    // ADJUST stock
+    @Override
+    public LivestockResponseDto adjustStock(Long id, StockAdjustmentRequestDto request, String updatedBy) {
+        Livestock livestock = repo.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("FishPond", "id", id));
+
+        livestock.adjustStock(request.getQuantity(), request.getReason());
+        livestock.setUpdatedBy(updatedBy);
+
+        repo.save(livestock);
+        return LivestockMapper.toResponseDto(livestock);
+    }
+
 
 }

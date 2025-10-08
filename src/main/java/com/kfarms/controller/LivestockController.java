@@ -1,17 +1,15 @@
 package com.kfarms.controller;
 
-import com.fasterxml.jackson.core.ObjectCodec;
-import com.kfarms.dto.LivestockRequest;
-import com.kfarms.dto.LivestockResponse;
+
+import com.kfarms.dto.LivestockRequestDto;
+import com.kfarms.dto.LivestockResponseDto;
+import com.kfarms.dto.StockAdjustmentRequestDto;
 import com.kfarms.entity.ApiResponse;
-import com.kfarms.entity.LivestockType;
 import com.kfarms.service.LivestockService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.apache.coyote.Response;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -19,10 +17,8 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
-import java.net.Authenticator;
+
 import java.time.LocalDate;
-import java.util.Date;
-import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -35,13 +31,13 @@ public class LivestockController {
     // CREATE - add new livestock
     @PreAuthorize("hasRole('ADMIN')")
     @PostMapping
-    public ResponseEntity<ApiResponse<LivestockResponse>> create(
-            @Valid @RequestBody LivestockRequest request
+    public ResponseEntity<ApiResponse<LivestockResponseDto>> create(
+            @Valid @RequestBody LivestockRequestDto request
     ){
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String createdBy = auth.getName();
 
-        LivestockResponse response = service.create(request, createdBy);
+        LivestockResponseDto response = service.create(request, createdBy);
         return ResponseEntity.ok(
                 new ApiResponse<>(true, "Livestock saved successfully", response)
         );
@@ -67,8 +63,8 @@ public class LivestockController {
     // READ - get livestock by ID
     @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER') or hasRole('STAFF')")
     @GetMapping("/{id}")
-    public ResponseEntity<ApiResponse<LivestockResponse>> getById(@PathVariable Long id){
-        LivestockResponse response = service.getById(id);
+    public ResponseEntity<ApiResponse<LivestockResponseDto>> getById(@PathVariable Long id){
+        LivestockResponseDto response = service.getById(id);
         if(response != null){
             return ResponseEntity.ok(
                     new ApiResponse<>(true, "Livestock fetched", response)
@@ -82,13 +78,13 @@ public class LivestockController {
     // UPDATE - update existing livestock
     @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
     @PutMapping("/{id}")
-    public ResponseEntity<ApiResponse<LivestockResponse>> update(
+    public ResponseEntity<ApiResponse<LivestockResponseDto>> update(
             @PathVariable Long id,
-            @RequestBody LivestockRequest request
+            @RequestBody LivestockRequestDto request
     ){
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String updatedBy = auth.getName();
-        LivestockResponse response = service.update(id, request, updatedBy);
+        LivestockResponseDto response = service.update(id, request, updatedBy);
         return ResponseEntity.ok(
                 new ApiResponse<>(true, "Livestock updated successfully", response)
         );
@@ -111,6 +107,21 @@ public class LivestockController {
         Map<String, Object> summary = service.getSummary();
         return ResponseEntity.ok(
                 new ApiResponse<>(true, "Livestock summary fetched successfully", summary)
+        );
+    }
+
+    // Adjust stock
+    @PostMapping("/{id}/adjust-stock")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<LivestockResponseDto>> adjustStock(
+            @PathVariable Long id,
+            @RequestBody StockAdjustmentRequestDto request
+    ){
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String updatedBy = auth != null ? auth.getName() : "SYSTEM";
+        LivestockResponseDto response = service.adjustStock(id, request, updatedBy);
+        return ResponseEntity.ok(
+                new ApiResponse<>(true, "Stock adjusted successfully", response)
         );
     }
 }

@@ -12,6 +12,8 @@ public interface EggProductionService {
     Map<String, Object> getAll(int page, int size, Long livestockId, LocalDate collectionDate);
     EggProductionResponseDto getById(Long id);
     EggProductionResponseDto update(Long id, EggProductionRequestDto request, String updatedBy);
-    void delete(Long id);
+    void delete(Long id, String deletedBy);
+    void restore(Long id);
     Map<String, Object> getSummary();
+
 }

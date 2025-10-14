@@ -83,9 +83,21 @@ public class SalesController {
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<String>> delete(@PathVariable Long id){
-        service.delete(id);
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String deletedBy = auth != null ? auth.getName() : "SYSTEM";
+        service.delete(id, deletedBy);
         return ResponseEntity.ok(
                 new ApiResponse<>(true, "Sales record deleted successfully", null)
+        );
+    }
+
+    // RESTORE
+    @PutMapping("/{id}/restore")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<String>> restore(@PathVariable Long id) {
+        service.restore(id);
+        return ResponseEntity.ok(
+                new ApiResponse<>(true, "Record restored", null)
         );
     }
 

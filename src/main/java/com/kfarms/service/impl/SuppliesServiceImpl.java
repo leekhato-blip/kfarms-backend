@@ -2,7 +2,6 @@ package com.kfarms.service.impl;
 
 import com.kfarms.dto.SuppliesRequestDto;
 import com.kfarms.dto.SuppliesResponseDto;
-import com.kfarms.entity.Inventory;
 import com.kfarms.entity.InventoryCategory;
 import com.kfarms.entity.Supplies;
 import com.kfarms.exceptions.ResourceNotFoundException;
@@ -57,7 +56,12 @@ public class SuppliesServiceImpl implements SuppliesService {
     public Map<String, Object> getAll(int page, int size, String itemName, String category, LocalDate date){
         Pageable pageable = PageRequest.of(page, size, Sort.by("id").descending());
         Specification<Supplies> spec = (root, query, cb) -> {
-          List<Predicate> predicates = new ArrayList<>();
+
+            List<Predicate> predicates = new ArrayList<>();
+
+            // exclude deleted
+            predicates.add(cb.isFalse(root.get("deleted")));
+
           if (itemName != null && !itemName.isBlank()) {
               predicates.add(cb.like(cb.lower(root.get("itemName")), "%" + itemName.toLowerCase() + "%"));
           }
@@ -90,7 +94,9 @@ public class SuppliesServiceImpl implements SuppliesService {
     // READ - get by ID
     @Override
     public SuppliesResponseDto getById(Long id){
-        Optional<Supplies> supplies = repo.findById(id);
+        Optional<Supplies> supplies = repo.findById(id)
+                .filter(s -> !Boolean.TRUE.equals(s.getDeleted()));
+
         return supplies.map(SuppliesMapper::toResponseDto).orElse(null);
     }
 
@@ -98,6 +104,7 @@ public class SuppliesServiceImpl implements SuppliesService {
     @Override
     public SuppliesResponseDto update(Long id, SuppliesRequestDto request, String updatedBy) {
         Supplies entity = repo.findById(id)
+                .filter(s -> !Boolean.TRUE.equals(s.getDeleted()))
                 .orElseThrow(() -> new ResourceNotFoundException("Supplies", "id", id));
 
         entity.setItemName(request.getItemName());
@@ -113,17 +120,43 @@ public class SuppliesServiceImpl implements SuppliesService {
 
     // DELETE - delete by ID
     @Override
-    public void delete(Long id) {
-        if (!repo.existsById(id)) {
-            throw new ResourceNotFoundException("Supplies", "id", id);
+    public void delete(Long id, String deletedBy) {
+        Supplies entity = repo.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Supplies", "id", id));
+
+        if (Boolean.TRUE.equals(entity.getDeleted())) {
+            throw new IllegalArgumentException("Supply record with ID " + id + " has already been deleted");
         }
-        repo.deleteById(id);
+
+        entity.setDeleted(true);
+        entity.setDeletedAt(LocalDateTime.now());
+        entity.setUpdatedBy(deletedBy);
+        repo.save(entity);
+    }
+
+    // RESTORE
+    @Override
+    public void restore(Long id) {
+        Supplies entity = repo.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Supplies", "id", id));
+
+        if (!Boolean.TRUE.equals(entity.getDeleted())) {
+            throw new IllegalArgumentException("Supply record with ID " + id + " has already been restored");
+        }
+
+        entity.setDeleted(false);
+        entity.setDeletedAt(null);
+        repo.save(entity);
     }
 
     // SUMMARY
     @Override
     public Map<String, Object> getSummary() {
-        List<Supplies> all = repo.findAll();
+        List<Supplies> all = repo.findAll()
+                .stream()
+                .filter(s -> !Boolean.TRUE.equals(s.getDeleted()))
+                .toList();
+
         Map<String, Object> summary = new HashMap<>();
 
         // Total Supply records

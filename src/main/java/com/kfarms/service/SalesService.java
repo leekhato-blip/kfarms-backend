@@ -11,6 +11,7 @@ public interface SalesService {
     Map<String, Object> getAll(int page, int size, String itemName, String category, LocalDate date);
     SalesResponseDto getById(Long id);
     SalesResponseDto update(Long id, SalesRequestDto dto, String updatedBy);
-    void delete(Long id);
+    void delete(Long id, String deletedBy);
+    void restore(Long id);
     Map<String, Object> getSummary();
 }

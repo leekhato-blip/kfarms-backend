@@ -4,7 +4,6 @@ import com.kfarms.dto.InventoryRequestDto;
 import com.kfarms.dto.InventoryResponseDto;
 import com.kfarms.entity.Inventory;
 import com.kfarms.entity.InventoryCategory;
-import com.kfarms.entity.Sales;
 import com.kfarms.exceptions.ResourceNotFoundException;
 import com.kfarms.mapper.InventoryMapper;
 import com.kfarms.repository.InventoryRepository;
@@ -18,6 +17,7 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.*;
 
 @Service
@@ -40,9 +40,17 @@ public class InventoryServiceImpl implements InventoryService {
     // READ - get all inventory items with Pagination and Filters
     @Override
     public Map<String, Object> getAll(int page, int size, String itemName, String category, LocalDate lastUpdated) {
+
         Pageable pageable = PageRequest.of(page, size, Sort.by("id").descending());
+
         Specification<Inventory> spec = (root, query, cb) -> {
+
             List<Predicate> predicates = new ArrayList<>();
+
+            // always exclude deleted
+            predicates.add(cb.isFalse(root.get("deleted")));
+
+
             if (itemName != null && !itemName.isBlank()) {
                 predicates.add(cb.like(cb.lower(root.get("itemName")), "%" + itemName.toLowerCase() + "%"));
             }
@@ -78,7 +86,9 @@ public class InventoryServiceImpl implements InventoryService {
     // READ - get inventory item by ID
     @Override
     public InventoryResponseDto getById(Long id) {
-        Optional<Inventory> inventory = repo.findById(id);
+        Optional<Inventory> inventory = repo.findById(id)
+                .filter(i -> !Boolean.TRUE.equals(i.getDeleted()));
+
         return inventory.map(InventoryMapper::toResponseDto).orElse(null);
     }
 
@@ -86,7 +96,9 @@ public class InventoryServiceImpl implements InventoryService {
     @Override
     public InventoryResponseDto update(Long id, InventoryRequestDto request, String updateBy) {
         Inventory entity = repo.findById(id)
+                .filter(i -> !Boolean.TRUE.equals(i.getDeleted()))
                 .orElseThrow(() -> new ResourceNotFoundException("Inventory", "id", id));
+
         entity.setItemName(request.getItemName());
         entity.setCategory(InventoryCategory.valueOf(request.getCategory().toUpperCase()));
         entity.setQuantity(request.getQuantity());
@@ -102,17 +114,44 @@ public class InventoryServiceImpl implements InventoryService {
 
     // DELETE - delete existing inventory item by ID
     @Override
-    public void delete(Long id) {
-        if (!repo.existsById(id)) {
-            throw new ResourceNotFoundException("Inventory", "id", id);
+    public void delete(Long id, String deletedBy) {
+        Inventory entity = repo.findById(id)
+                .filter(i -> !Boolean.TRUE.equals(i.getDeleted()))
+                .orElseThrow(() -> new ResourceNotFoundException("Inventory", "id", id));
+
+        if (Boolean.TRUE.equals(entity.getDeleted())) {
+            throw new IllegalArgumentException("Inventory with ID: " + id + " soft deleted successfully");
         }
-        repo.deleteById(id);
+
+        entity.setDeleted(true);
+        entity.setDeletedAt(LocalDateTime.now());
+        entity.setUpdatedBy(deletedBy);
+        repo.save(entity);
+    }
+
+    // RESTORE
+    @Override
+    public void restore(Long id) {
+        Inventory entity = repo.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Inventory", "id", id));
+
+        if (!Boolean.TRUE.equals(entity.getDeleted())) {
+            throw new IllegalArgumentException("Inventory record with ID " + id + " has already been restored");
+        }
+
+        entity.setDeleted(false);
+        entity.setDeletedAt(null);
+        repo.save(entity);
     }
 
     // SUMMARY - Dashboard, Report and Analysis
     @Override
     public Map<String, Object> getSummary() {
-        List<Inventory> all = repo.findAll();
+        List<Inventory> all = repo.findAll()
+                .stream()
+                .filter(i -> !Boolean.TRUE.equals(i.getDeleted()))
+                .toList();
+
         Map<String, Object> summary = new HashMap<>();
 
         // Total Inventory record
@@ -154,6 +193,7 @@ public class InventoryServiceImpl implements InventoryService {
     @Override
     public void adjustStock(String itemName, InventoryCategory category, int quantityChange, String unit, String note){
         Inventory inventory = repo.findByItemNameAndCategory(itemName, category)
+                .filter(i -> !Boolean.TRUE.equals(i.getDeleted()))
                 .orElseGet(() -> {
                    Inventory newInventory = new Inventory();
                    newInventory.setItemName(itemName.trim());

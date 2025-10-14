@@ -11,7 +11,7 @@ import java.time.LocalDate;
 
 @Entity
 @Table(name = "egg_production", uniqueConstraints = {
-        @UniqueConstraint(columnNames = {"productionDate", "batch_id"})
+        @UniqueConstraint(columnNames = {"batch_id"})
 })
 @Data
 @RequiredArgsConstructor

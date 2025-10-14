@@ -18,7 +18,7 @@ import java.time.LocalDate;
 import java.util.Map;
 
 @RestController
-@RequestMapping(name = "/api/egg")
+@RequestMapping(value = "/api/eggs")
 @RequiredArgsConstructor
 @Validated
 public class EggProductionController {
@@ -79,9 +79,21 @@ public class EggProductionController {
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<String>> delete(@PathVariable Long id) {
-        eggService.delete(id);
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String deletedBy = auth != null ? auth.getName() : "SYSTEM";
+        eggService.delete(id, deletedBy);
         return ResponseEntity.ok(
-                new ApiResponse<>(true, "Egg record deleted successfully", null)
+                new ApiResponse<>(true, "Egg record with ID: " + id + " soft deleted successfully", null)
+        );
+    }
+
+    // RESTORE
+    @PutMapping("/{id}/restore")
+    @PreAuthorize("hasRole('ADMIN')")
+    public  ResponseEntity<ApiResponse<String>> restore(@PathVariable Long id) {
+        eggService.restore(id);
+        return ResponseEntity.ok(
+                new ApiResponse<>(true, "Record restored", null)
         );
     }
 

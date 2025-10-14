@@ -8,6 +8,9 @@ import jakarta.persistence.EntityListeners;
 import lombok.Data;
 import lombok.Getter;
 import lombok.Setter;
+import org.hibernate.annotations.CurrentTimestamp;
+import org.hibernate.annotations.SQLDelete;
+import org.hibernate.annotations.Where;
 import org.springframework.data.annotation.*;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
@@ -18,6 +21,8 @@ import java.time.LocalDateTime;
 @EntityListeners(AuditingEntityListener.class)
 @Data
 @JsonInclude(JsonInclude.Include.NON_NULL)
+@SQLDelete(sql = "UPDATE #{#entityName} SET deleted = true, deleted_at = CURRENT_TIMESTAMP WHERE id = ?")
+@Where(clause = "deleted = false")
 public abstract class Auditable {
 
     @CreatedBy
@@ -37,4 +42,12 @@ public abstract class Auditable {
     @Column(name = "updated_at")
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "Africa/Lagos")
     private LocalDateTime updatedAt;
+
+    // soft delete
+    @Column(nullable = false)
+    private Boolean deleted = false;
+
+    @Column(name = "deleted_at")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "Africa/Lagos")
+    private LocalDateTime deletedAt;
 }

@@ -11,6 +11,7 @@ public interface FishHatchService {
     FishHatchResponseDto getById(Long id);
     FishHatchResponseDto create(FishHatchRequestDto request);
     FishHatchResponseDto update(Long id, FishHatchRequestDto request, String updateBy);
-    void delete(Long id);
+    void delete(Long id, String deletedBy);
+    void restore(Long id);
     Map<String, Object> getSummary();
 }

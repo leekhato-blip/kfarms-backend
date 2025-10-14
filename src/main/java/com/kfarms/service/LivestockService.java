@@ -13,7 +13,8 @@ public interface LivestockService {
     LivestockResponseDto getById(Long id);
     LivestockResponseDto create(LivestockRequestDto request, String createdBy);
     LivestockResponseDto update(Long id, LivestockRequestDto request, String updatedBy);
-    void delete(Long id);
+    void delete(Long id, String deletedBy);
+    void restore(Long id);
     Map<String, Object> getSummary();
     LivestockResponseDto adjustStock(Long id, StockAdjustmentRequestDto request, String updatedBy);
 }

@@ -12,12 +12,12 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.parameters.P;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
 import java.util.Map;
 
-// TODO: Add role-based access control to this controller
 @RestController
 @RequestMapping("/api/supplies")
 @RequiredArgsConstructor
@@ -72,7 +72,7 @@ public class SuppliesController {
             @RequestBody SuppliesRequestDto request
     ) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        String updatedBy = auth.getName();
+        String updatedBy = auth != null ? auth.getName() : "SYSTEM";
         SuppliesResponseDto response = service.update(id, request, updatedBy);
         return ResponseEntity.ok(
                 new ApiResponse<>(true, "Supply updated successfully", response)
@@ -83,9 +83,21 @@ public class SuppliesController {
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<String>> delete(@PathVariable Long id){
-        service.delete(id);
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String deletedBy = auth != null ? auth.getName() : "SYSTEM";
+        service.delete(id, deletedBy);
         return ResponseEntity.ok(
                 new ApiResponse<>(true, "Supply record deleted successfully", null)
+        );
+    }
+
+    // RESTORE
+    @PutMapping("/{id}/restore")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<String>> restore(@PathVariable Long id) {
+        service.restore(id);
+        return ResponseEntity.ok(
+                new ApiResponse<>(true, "Record restored", null)
         );
     }
 

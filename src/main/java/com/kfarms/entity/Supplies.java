@@ -1,5 +1,6 @@
 package com.kfarms.entity;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -25,9 +26,11 @@ public class Supplies extends Auditable{
     @Column(nullable = false)
     private int quantity;
 
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "0.##")
     @Column(nullable = false)
     private double unitPrice;
 
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "0.##")
     @Column(nullable = false)
     private double totalPrice; // auto = quantity + unitPrice
 

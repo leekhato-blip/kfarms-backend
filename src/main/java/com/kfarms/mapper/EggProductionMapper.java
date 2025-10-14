@@ -10,7 +10,9 @@ public class EggProductionMapper {
     public static EggProduction toEntity(EggProductionRequestDto request, Livestock livestock) {
         EggProduction entity = new EggProduction();
         entity.setLivestock(livestock);
-        entity.setCollectionDate(request.getCollectionDate());
+        if (request.getCollectionDate() != null) {
+            entity.setCollectionDate(request.getCollectionDate());
+        }
         entity.setGoodEggs(request.getGoodEggs());
         entity.setDamagedEggs(request.getDamagedEggs());
         entity.setNotes(request.getNote());

@@ -16,6 +16,7 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -29,6 +30,7 @@ public class EggProductionServiceImpl implements EggProductionService {
     @Override
     public EggProductionResponseDto create(EggProductionRequestDto request) {
         Livestock livestock = livestockRepo.findById(request.getLivestockId())
+                .filter(l -> !Boolean.TRUE.equals(l.getDeleted()))
                 .orElseThrow(() -> new ResourceNotFoundException("Livestock", "id", request.getLivestockId()));
 
         EggProduction entity = EggProductionMapper.toEntity(request, livestock);
@@ -45,6 +47,9 @@ public class EggProductionServiceImpl implements EggProductionService {
 
         Specification<EggProduction> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
+
+            // exclude deleted
+            predicates.add(cb.isFalse(root.get("deleted")));
 
             if (livestockId != null) {
                 predicates.add(cb.equal(root.get("livestock").get("id"), livestockId));
@@ -77,6 +82,7 @@ public class EggProductionServiceImpl implements EggProductionService {
     @Override
     public EggProductionResponseDto getById(Long id) {
         EggProduction entity = repo.findById(id)
+                .filter(e -> !Boolean.TRUE.equals(e.getDeleted()))
                 .orElseThrow(() -> new ResourceNotFoundException("Egg", "id", id));
         return EggProductionMapper.toResponseDto(entity);
     }
@@ -85,6 +91,7 @@ public class EggProductionServiceImpl implements EggProductionService {
     @Override
     public EggProductionResponseDto update(Long id, EggProductionRequestDto request, String updatedBy) {
         EggProduction entity = repo.findById(id)
+                .filter(e -> !Boolean.TRUE.equals(e.getDeleted()))
                 .orElseThrow(() -> new ResourceNotFoundException("Egg", "id", id));
 
         if (request.getGoodEggs() != null) entity.setGoodEggs(request.getGoodEggs());
@@ -99,26 +106,50 @@ public class EggProductionServiceImpl implements EggProductionService {
 
     // DELETE
     @Override
-    public void delete(Long id) {
-        if (!repo.existsById(id)) {
-            throw new ResourceNotFoundException("Egg", "id", id);
+    public void delete(Long id, String deletedBy) {
+        EggProduction entity = repo.findById(id)
+                        .orElseThrow(() -> new ResourceNotFoundException("EggProduction", "id", id));
+
+        if (Boolean.TRUE.equals(entity.getDeleted())) {
+            throw new IllegalArgumentException("Egg Record with ID " + id + " has already been deleted");
         }
-        repo.deleteById(id);
+        entity.setDeleted(true);
+        entity.setDeletedAt(LocalDateTime.now());
+        entity.setUpdatedBy(deletedBy);
+        repo.save(entity);
+    }
+
+    // RESTORE
+    @Override
+    public void restore(Long id) {
+        EggProduction entity = repo.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("EggProduction", "id", id));
+
+        if (!Boolean.TRUE.equals(entity.getDeleted())) {
+            throw new IllegalArgumentException("Egg record with ID " + id + " has already been restored");
+        }
+        entity.setDeleted(false);
+        entity.setDeletedAt(null);
+        repo.save(entity);
     }
 
     // SUMMARY
     @Override
     public Map<String, Object> getSummary() {
-        List<EggProduction> all = repo.findAll();
+        List<EggProduction> all = repo.findAll()
+                .stream()
+                .filter(e -> !Boolean.TRUE.equals(e.getDeleted()))
+                .toList();
 
-        int totalCollected = all.stream().mapToInt(e -> e.getGoodEggs() != null ? e.getGoodEggs() : 0).sum();
-        int totalCracked = all.stream().mapToInt(e -> e.getDamagedEggs() != null ? e.getDamagedEggs() : 0).sum();
+        LocalDate now = LocalDate.now();
+        int currentMonth = now.getMonthValue();
+        int currentYear = now.getYear();
 
-        Map<String, Object> summary = new HashMap<>();
-        summary.put("totalCollected", totalCollected);
-        summary.put("totalCracked", totalCracked);
+        int totalGood = all.stream().mapToInt(e -> e.getGoodEggs() != null ? e.getGoodEggs() : 0).sum();
+        int totalDamaged = all.stream().mapToInt(e -> e.getDamagedEggs() != null ? e.getDamagedEggs() : 0).sum();
+        double totalCrates = all.stream().mapToDouble(EggProduction::getCratesProduced).sum();
 
-        // Group by livestock batch name
+        // Group by livestock batch
         Map<String, Integer> countByBatch = all.stream()
                 .filter(e -> e.getLivestock() != null)
                 .collect(Collectors.groupingBy(
@@ -126,6 +157,24 @@ public class EggProductionServiceImpl implements EggProductionService {
                         Collectors.summingInt(e -> e.getGoodEggs() != null ? e.getGoodEggs() : 0)
                 ));
 
+        // Monthly Summary
+        List<EggProduction> monthly = all.stream()
+                .filter(e -> e.getCollectionDate() != null
+                        && e.getCollectionDate().getMonthValue() == currentMonth
+                        && e.getCollectionDate().getYear() == currentYear)
+                .toList();
+
+        int monthlyGood = monthly.stream().mapToInt(e -> e.getGoodEggs() != null ? e.getGoodEggs() : 0).sum();
+        int monthlyDamaged = monthly.stream().mapToInt(e -> e.getDamagedEggs() != null ? e.getDamagedEggs() : 0).sum();
+        double monthlyCrates = monthly.stream().mapToDouble(EggProduction::getCratesProduced).sum();
+
+        Map<String, Object> summary = new HashMap<>();
+        summary.put("totalGoodEggs", totalGood);
+        summary.put("totalCracked", totalDamaged);
+        summary.put("totalCratesProduced", totalCrates);
+        summary.put("monthlyGoodEggs", monthlyGood);
+        summary.put("monthlyCracked", monthlyDamaged);
+        summary.put("monthlyCratesProduced", monthlyCrates);
         summary.put("countByBatch", countByBatch);
 
         return summary;

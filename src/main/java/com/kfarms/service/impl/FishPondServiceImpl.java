@@ -21,6 +21,7 @@ import org.springframework.stereotype.Service;
 
 import javax.swing.text.html.Option;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -52,7 +53,10 @@ public class FishPondServiceImpl implements FishPondService {
     ) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("id").descending());
         Specification<FishPond> spec = (root, query, cb) ->  {
+
             List<Predicate> predicates = new ArrayList<>();
+
+            predicates.add(cb.isFalse(root.get("deleted")));
 
             // Filter: pondName (case-insensitive contains)
             if (pondName != null && !pondName.isBlank()) {
@@ -108,7 +112,10 @@ public class FishPondServiceImpl implements FishPondService {
     // READ - get fishPond by ID
     @Override
     public FishPondResponseDto getById(Long id){
-        Optional<FishPond> fishPond = repo.findById(id);
+        Optional<FishPond> fishPond = repo.findById(id)
+                .filter(f -> !Boolean.TRUE.equals(f.getDeleted()));
+
+
         return fishPond.map(f -> {
             FishPondResponseDto dto = FishPondMapper.toResponseDto(f);
             // set nextWaterChange when fetching by ID
@@ -177,17 +184,40 @@ public class FishPondServiceImpl implements FishPondService {
     }
 
     // DELETE - delete existing entity by ID
-    public void delete(Long id){
-        if (!repo.existsById(id)) {
-            throw new ResourceNotFoundException("FishPond", "id", id);
+    public void delete(Long id, String deletedBy){
+        FishPond entity = repo.findById(id)
+                .filter(f -> !Boolean.TRUE.equals(f.getDeleted()))
+                .orElseThrow(() -> new ResourceNotFoundException("FishPond", "id", id));
+
+        entity.setDeleted(true);
+        entity.setDeletedAt(LocalDateTime.now());
+        entity.setUpdatedBy(deletedBy);
+        repo.save(entity);
+    }
+
+    // RESTORE
+    public void restore(Long id) {
+        FishPond entity = repo.findById(id)
+                .filter(f -> !Boolean.TRUE.equals(f.getDeleted()))
+                .orElseThrow(() -> new ResourceNotFoundException("FishPond", "id", id));
+
+        if (!Boolean.TRUE.equals(entity.getDeleted())) {
+            throw new IllegalArgumentException("FishPond record with ID " + id + " has already been restored");
         }
-        repo.deleteById(id);
+
+        entity.setDeleted(false);
+        entity.setDeletedAt(null);
+        repo.save(entity);
     }
 
     // SUMMARY - Dashboard, Report and Analysis
     @Override
     public Map<String, Object> getSummary() {
-        List<FishPond> all = repo.findAll();
+        List<FishPond> all = repo.findAll()
+                .stream()
+                .filter(f -> !Boolean.TRUE.equals(f.getDeleted()))
+                .toList();
+
         Map<String, Object> summary = new HashMap<>();
 
         // Total FishPond record
@@ -232,6 +262,7 @@ public class FishPondServiceImpl implements FishPondService {
     @Override
     public FishPondResponseDto adjustStock(Long id, StockAdjustmentRequestDto request, String updatedBy) {
         FishPond pond = repo.findById(id)
+                .filter(f -> !Boolean.TRUE.equals(f.getDeleted()))
                 .orElseThrow(() -> new ResourceNotFoundException("FishPond", "id", id));
 
         pond.adjustStock(request.getQuantity(), request.getReason());

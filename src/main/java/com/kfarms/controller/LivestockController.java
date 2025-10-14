@@ -91,13 +91,25 @@ public class LivestockController {
     }
 
     // DELETE - delete livestock by ID
-    @PreAuthorize("hasRole('ADMIN')")
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<String>> delete(@PathVariable Long id){
-        service.delete(id);
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String deletedBy = auth.getName();
+        service.delete(id, deletedBy);
         return ResponseEntity.ok(
-                new ApiResponse<>(true, "Livestock with ID: " + id + " deleted successfully", null
-                ));
+                new ApiResponse<>(true, "Livestock with ID: " + id + " soft deleted successfully", null)
+        );
+    }
+
+    // RESTORE
+    @PutMapping("/{id}/restore")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse> restore(@PathVariable Long id) {
+        service.restore(id);
+        return ResponseEntity.ok(
+                new ApiResponse(true, "Livestock record restored", null)
+        );
     }
 
     // DASHBOARD SUMMARY

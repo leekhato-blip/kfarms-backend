@@ -11,7 +11,6 @@ import com.kfarms.repository.FeedRepository;
 import com.kfarms.service.FeedService;
 import com.kfarms.service.InventoryService;
 import jakarta.persistence.criteria.Predicate;
-import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -22,7 +21,6 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
-import java.util.stream.Collector;
 import java.util.stream.Collectors;
 
 @Service
@@ -58,13 +56,13 @@ public class FeedServiceImpl implements FeedService {
     public Map<String, Object> getAll(int page, int size, String batchType, LocalDate date) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("id").descending());
 
+
         // Convert batchType string to enum (case-insensitive)
         FeedBatchType batchTypeEnum = null;
         if (batchType != null && !batchType.isBlank()) {
             try {
                 batchTypeEnum = FeedBatchType.valueOf(batchType.trim().toUpperCase());
             } catch (IllegalArgumentException ex) {
-                System.out.println("Invalid batchType detected: " + batchType); // debug
                 throw new IllegalArgumentException(
                         "Invalid batchType: '" + batchType + "' . Allowed values: "
                         + Arrays.toString(FeedBatchType.values())
@@ -76,6 +74,10 @@ public class FeedServiceImpl implements FeedService {
 
         Specification<Feed> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
+
+            //  exclude deleted
+            predicates.add(cb.isFalse(root.get("deleted")));
+
             if (batchTypeEnumFinal != null) {
                 predicates.add(cb.equal(root.get("batchType"), batchTypeEnumFinal));
             }
@@ -106,14 +108,17 @@ public class FeedServiceImpl implements FeedService {
     // READ - get by ID
     @Override
     public FeedResponseDto getById(Long id) {
-        Optional<Feed> feed = repo.findById(id);
-        return feed.map(FeedMapper::toResponseDto).orElse(null);
+        Feed entity = repo.findById(id)
+                .filter(f -> !Boolean.TRUE.equals(f.getDeleted()))
+                .orElseThrow(() -> new ResourceNotFoundException("Feed", "id", id));
+        return FeedMapper.toResponseDto(entity);
     }
 
     // UPDATE - update existing Feed by ID
     @Override
     public FeedResponseDto update(Long id, FeedRequestDto request, String updatedBy) {
         Feed entity = repo.findById(id)
+                .filter(f -> !Boolean.TRUE.equals(f.getDeleted()))
                 .orElseThrow(() -> new ResourceNotFoundException("Feed", "id", id));
 
         // update fields from request
@@ -130,17 +135,42 @@ public class FeedServiceImpl implements FeedService {
 
     // DELETE - delete by ID
     @Override
-    public void delete(Long id) {
-        if (!repo.existsById(id)) {
-            throw new ResourceNotFoundException("Feed", "id", id);
+    public void delete(Long id, String deletedBy) {
+        Feed entity = repo.findById(id)
+                        .orElseThrow(() -> new ResourceNotFoundException("Feed", "id", id));
+
+        if (Boolean.TRUE.equals(entity.getDeleted())) {
+            throw new IllegalArgumentException("Feed record with ID " + id + " has already been deleted");
         }
-        repo.deleteById(id);
+        entity.setDeleted(true);
+        entity.setDeletedAt(LocalDateTime.now());
+        entity.setUpdatedBy(deletedBy);
+        repo.save(entity);
+    }
+
+    // RESTORE
+    @Override
+    public void restore(Long id) {
+        Feed entity = repo.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Feed", "id", id));
+
+        if (!Boolean.TRUE.equals(entity.getDeleted())) {
+            throw new IllegalArgumentException("Feed with ID " + id + " has already been restored");
+        }
+
+        entity.setDeleted(false);
+        entity.setDeletedAt(LocalDateTime.now());
+        repo.save(entity);
     }
 
     // SUMMARY
     @Override
     public Map<String, Object> getSummary() {
-        List<Feed> all = repo.findAll();
+        List<Feed> all = repo.findAll()
+                .stream()
+                .filter(f -> !Boolean.TRUE.equals(f.getDeleted()))
+                .toList();
+
         Map<String, Object> summary = new HashMap<>();
 
         // total feed batches (records)

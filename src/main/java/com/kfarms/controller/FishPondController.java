@@ -4,22 +4,17 @@ import com.kfarms.dto.FishPondRequestDto;
 import com.kfarms.dto.FishPondResponseDto;
 import com.kfarms.dto.StockAdjustmentRequestDto;
 import com.kfarms.entity.ApiResponse;
-import com.kfarms.entity.FishPond;
-import com.kfarms.mapper.FishPondMapper;
 import com.kfarms.service.FishPondService;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
-import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 // TODO: Add role-based access control to this controller
 @RestController
@@ -91,13 +86,22 @@ public class FishPondController {
 
 
     // DELETE - delete existing fishPond record by ID
-    // TODO: Prevent deletion if FishPond has associated Hatches
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<String>> delete(@PathVariable Long id){
-        service.delete(id);
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String deletedBy = auth != null ? auth.getName() : "SYSTEM";
+        service.delete(id, deletedBy);
         return ResponseEntity.ok(
                 new ApiResponse<>(true, "FishPond record deleted successfully", null)
+        );
+    }
+
+    // DELETE
+    public ResponseEntity<ApiResponse<String>> restore(@PathVariable Long id) {
+        service.restore(id);
+        return ResponseEntity.ok(
+                new ApiResponse<>(true, "Record restored", null)
         );
     }
 

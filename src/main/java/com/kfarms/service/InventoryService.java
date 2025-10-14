@@ -12,7 +12,8 @@ public interface InventoryService {
     Map<String, Object> getAll(int page, int size, String itemName, String category, LocalDate lastUpdated);
     InventoryResponseDto getById(Long id);
     InventoryResponseDto update(Long id, InventoryRequestDto request, String updatedBy);
-    void delete(Long id);
+    void delete(Long id, String deletedBy);
+    void restore(Long id);
     Map<String, Object> getSummary();
     void adjustStock(String itemName, InventoryCategory category, int quantityChange, String unit, String note);
 }

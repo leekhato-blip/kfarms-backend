@@ -9,7 +9,7 @@ public class SalesRequestDto {
     private String itemName;
     private String category;
     private Integer quantity;
-    private Double unitPrice;
+    private double unitPrice;
     private String buyer;
     private String note;
     private LocalDate date; // optional - defaults to today

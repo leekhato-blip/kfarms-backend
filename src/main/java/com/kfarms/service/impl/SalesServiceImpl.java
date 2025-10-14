@@ -19,6 +19,7 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -54,7 +55,11 @@ public class SalesServiceImpl implements SalesService {
     public Map<String, Object> getAll(int page, int size, String itemName, String category, LocalDate date) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("id").descending());
         Specification<Sales> spec = (root, query, cb) -> {
+
           List<Predicate> predicates = new ArrayList<>();
+          // exclude deleted
+            predicates.add(cb.isFalse(root.get("deleted")));
+
           if (itemName != null && !itemName.isBlank()) {
               predicates.add(cb.like(cb.lower(root.get("itemName")), "%" + itemName.toLowerCase() + "%"));
           }
@@ -87,14 +92,18 @@ public class SalesServiceImpl implements SalesService {
     // READ - get sale item by ID
     @Override
     public SalesResponseDto getById(Long id) {
-        Optional<Sales> sales = repo.findById(id);
-        return sales.map(SalesMapper::toResponseDto).orElse(null);
+        Sales entity = repo.findById(id)
+                .filter(s -> !Boolean.TRUE.equals(s.getDeleted()))
+                .orElseThrow(() -> new ResourceNotFoundException("Sales", "id", id));
+
+        return SalesMapper.toResponseDto(entity);
     }
 
     // UPDATE - update existing sales item by ID
     @Override
     public SalesResponseDto update(Long id, SalesRequestDto request, String updatedBy) {
         Sales entity = repo.findById(id)
+                .filter(s -> !Boolean.TRUE.equals(s.getDeleted()))
                 .orElseThrow(() -> new ResourceNotFoundException("Sales", "id", id));
 
         entity.setItemName(request.getItemName());
@@ -110,17 +119,46 @@ public class SalesServiceImpl implements SalesService {
 
     // DELETE - delete sales item by ID
     @Override
-    public void delete(Long id) {
-        if (!repo.existsById(id)) {
-            throw new ResourceNotFoundException("Sales", "id", id);
+    public void delete(Long id, String deletedBy) {
+        Sales entity = repo.findById(id)
+                .filter(s -> !Boolean.TRUE.equals(s.getDeleted()))
+                .orElseThrow(() -> new ResourceNotFoundException("Sales", "id", id));
+
+        if (Boolean.TRUE.equals(entity.getDeleted())) {
+            throw new IllegalArgumentException("Sales record with ID " + id + " has already been deleted");
         }
-        repo.deleteById(id);
+
+        entity.setDeleted(true);
+        entity.setDeletedAt(LocalDateTime.now());
+        entity.setUpdatedBy(deletedBy);
+        repo.save(entity);
+    }
+
+    // RESTORE
+    @Override
+    public void restore(Long id) {
+        Sales entity = repo.findById(id)
+                .filter(s -> !Boolean.TRUE.equals(s.getDeleted()))
+                .orElseThrow(() -> new ResourceNotFoundException("Sales", "id", id));
+
+        if (!Boolean.TRUE.equals(entity.getDeleted())) {
+            throw new IllegalArgumentException("Sales record with ID " + id + " has already been restored");
+        }
+
+        entity.setDeleted(false);
+        entity.setDeletedAt(null);
+        repo.save(entity);
     }
 
     // SUMMARY - for analysis, dashboard and reports
     @Override
     public Map<String, Object> getSummary() {
-        List<Sales> all = repo.findAll();
+
+        List<Sales> all = repo.findAll()
+                .stream()
+                .filter(s -> !Boolean.TRUE.equals(s.getDeleted()))
+                .toList();
+
         Map<String, Object> summary = new HashMap<>();
 
         // Total sales record
@@ -159,6 +197,7 @@ public class SalesServiceImpl implements SalesService {
                 .sum();
         summary.put("revenueThisYear", revenueThisYear);
 
+        // Last Sales Date
         all.stream()
                 .map(Sales::getDate)
                 .filter(Objects::nonNull)

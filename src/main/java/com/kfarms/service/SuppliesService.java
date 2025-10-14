@@ -11,6 +11,7 @@ public interface SuppliesService {
     Map<String, Object> getAll(int page, int size, String itemName, String Category, LocalDate date);
     SuppliesResponseDto getById(Long id);
     SuppliesResponseDto update(Long id, SuppliesRequestDto request, String updatedBy);
-    void delete(Long id);
+    void delete(Long id, String deletedBy);
+    void restore(Long id);
     Map<String, Object> getSummary();
 }

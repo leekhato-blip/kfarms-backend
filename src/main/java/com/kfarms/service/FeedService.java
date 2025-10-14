@@ -12,7 +12,8 @@ public interface FeedService {
     Map<String, Object> getAll(int page, int size, String batchType, LocalDate date);
     FeedResponseDto getById(Long id);
     FeedResponseDto update(Long id, FeedRequestDto request, String updatedBy);
-    void delete(Long id);
+    void delete(Long id, String deletedBy);
+    void restore(Long id);
     Map<String, Object> getSummary();
 }
 

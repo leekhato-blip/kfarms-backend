@@ -21,5 +21,7 @@ public interface FishHatchRepository extends JpaRepository<FishHatch, Long> {
     // 🗓️ Optional: find hatches between two dates (for future analytics)
     List<FishHatch> findByHatchDateBetween(LocalDate startDate, LocalDate endDate);
 
+    @Query("SELECT fh.pond.id, COUNT(fh) FROM FishHatch fh WHERE fh.deleted = false GROUP BY fh.pond.id")
+    List<Object[]> countHatchesGroupedByPond();
 
 }

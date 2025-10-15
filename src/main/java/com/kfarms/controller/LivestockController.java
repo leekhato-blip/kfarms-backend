@@ -80,7 +80,7 @@ public class LivestockController {
     @PutMapping("/{id}")
     public ResponseEntity<ApiResponse<LivestockResponseDto>> update(
             @PathVariable Long id,
-            @RequestBody LivestockRequestDto request
+            @Valid @RequestBody LivestockRequestDto request
     ){
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String updatedBy = auth.getName();
@@ -127,7 +127,7 @@ public class LivestockController {
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<LivestockResponseDto>> adjustStock(
             @PathVariable Long id,
-            @RequestBody StockAdjustmentRequestDto request
+            @Valid @RequestBody StockAdjustmentRequestDto request
     ){
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String updatedBy = auth != null ? auth.getName() : "SYSTEM";

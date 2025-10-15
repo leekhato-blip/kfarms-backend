@@ -18,6 +18,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
@@ -161,43 +162,58 @@ public class SalesServiceImpl implements SalesService {
 
         Map<String, Object> summary = new HashMap<>();
 
-        // Total sales record
+        // 🟣 Total sales record
         summary.put("totalSalesRecords", all.size());
 
-        // Total revenue
-        double totalRevenue = all.stream()
-                .mapToDouble(Sales::getTotalPrice)
-                .sum();
+        // 🟣 Total revenue
+        BigDecimal totalRevenue = all.stream()
+                .map(Sales::getTotalPrice)
+                .filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
         summary.put("totalRevenue", totalRevenue);
 
-        // Total by category
+        // 🟣 Total count by category
         Map<String, Long> countByCategory = all.stream()
-                .collect(Collectors.groupingBy(s -> s.getCategory().name(), Collectors.counting()));
+                        .filter(s -> s.getCategory() != null)
+                                .collect(Collectors.groupingBy(
+                                        s -> s.getCategory().name(),
+                                        Collectors.counting()
+                                ));
         summary.put("countByCategory", countByCategory);
 
-        // Total revenue by category
-        Map<String, Double> revenueByCategory = all.stream()
-                .collect(Collectors.groupingBy(s -> s.getCategory().name(),
-                        Collectors.summingDouble(Sales::getTotalPrice)));
+        // 🟣 Revenue by category
+        Map<String, BigDecimal> revenueByCategory = all.stream()
+                        .filter(s -> s.getCategory() != null)
+                                .collect(Collectors.groupingBy(
+                                        s -> s.getCategory().name(),
+                                        Collectors.reducing(BigDecimal.ZERO,
+                                                Sales::getTotalPrice,
+                                                BigDecimal::add)
+                                ));
         summary.put("revenueByCategory", revenueByCategory);
 
-        // Monthly Revenue
-        double revenueThisMonth = all.stream()
+        // 🟣 Monthly revenue
+        BigDecimal revenueThisMonth = all.stream()
                 .filter(s -> s.getDate() != null &&
                              s.getDate().getMonth() == LocalDate.now().getMonth() &&
                              s.getDate().getYear() == LocalDate.now().getYear())
-                .mapToDouble(Sales::getTotalPrice)
-                .sum();
+                .map(Sales::getTotalPrice)
+                .filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
         summary.put("revenueThisMonth", revenueThisMonth);
 
-        // Annual Revenue
-        double revenueThisYear = all.stream()
+        // 🟣 Annual revenue
+        BigDecimal revenueThisYear = all.stream()
                 .filter(s -> s.getDate() != null && s.getDate().getYear() == (LocalDate.now().getYear()))
-                .mapToDouble(Sales::getTotalPrice)
-                .sum();
+                .map(Sales::getTotalPrice)
+                .filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
         summary.put("revenueThisYear", revenueThisYear);
 
-        // Last Sales Date
+        // 🟣 Last Sales Date
         all.stream()
                 .map(Sales::getDate)
                 .filter(Objects::nonNull)

@@ -4,6 +4,7 @@ import com.kfarms.dto.InventoryRequestDto;
 import com.kfarms.dto.InventoryResponseDto;
 import com.kfarms.entity.ApiResponse;
 import com.kfarms.service.InventoryService;
+import jakarta.validation.Valid;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -27,7 +28,8 @@ public class InventoryController {
     // CREATE - add new inventory item
     @PostMapping
     @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
-    public ResponseEntity<ApiResponse<InventoryResponseDto>> create(@RequestBody InventoryRequestDto dto) {
+    public ResponseEntity<ApiResponse<InventoryResponseDto>> create(
+            @Valid @RequestBody InventoryRequestDto dto) {
         InventoryResponseDto saved = service.create(dto);
         return ResponseEntity.ok(
                 new ApiResponse<>(true, "Inventory record saved successfully", saved)

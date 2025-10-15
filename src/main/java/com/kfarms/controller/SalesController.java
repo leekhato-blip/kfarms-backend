@@ -4,6 +4,7 @@ import com.kfarms.dto.SalesRequestDto;
 import com.kfarms.dto.SalesResponseDto;
 import com.kfarms.entity.ApiResponse;
 import com.kfarms.service.SalesService;
+import jakarta.validation.Valid;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -25,7 +26,8 @@ public class SalesController {
     // CREATE - add new supply item
     @PostMapping
     @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
-    public ResponseEntity<ApiResponse<SalesResponseDto>> create(@RequestBody SalesRequestDto dto){
+    public ResponseEntity<ApiResponse<SalesResponseDto>> create(
+            @Valid @RequestBody SalesRequestDto dto){
         SalesResponseDto saved = service.create(dto);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(

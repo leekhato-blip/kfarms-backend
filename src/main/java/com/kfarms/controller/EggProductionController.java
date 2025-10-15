@@ -4,6 +4,7 @@ import com.kfarms.dto.EggProductionRequestDto;
 import com.kfarms.dto.EggProductionResponseDto;
 import com.kfarms.entity.ApiResponse;
 import com.kfarms.service.EggProductionService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
@@ -27,7 +28,8 @@ public class EggProductionController {
     // CREATE
     @PostMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
-    public ResponseEntity<ApiResponse<EggProductionResponseDto>> create(@RequestBody EggProductionRequestDto request) {
+    public ResponseEntity<ApiResponse<EggProductionResponseDto>> create(
+            @Valid @RequestBody EggProductionRequestDto request) {
         EggProductionResponseDto response = eggService.create(request);
         return ResponseEntity.ok(
                 new ApiResponse<>(true, "Egg record saved successfully", response)

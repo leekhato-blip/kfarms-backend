@@ -14,7 +14,4 @@ import java.time.LocalDate;
 
 @Repository
 public interface LivestockRepository extends JpaRepository<Livestock, Long>, JpaSpecificationExecutor<Livestock> {
-
-    @Query("SELECT l FROM Livestock l WHERE l.deleted = false")
-    Page<Livestock> findAllActive(Pageable pageable);
 }

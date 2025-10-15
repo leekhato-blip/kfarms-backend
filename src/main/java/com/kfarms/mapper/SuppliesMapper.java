@@ -5,6 +5,8 @@ import com.kfarms.dto.SuppliesResponseDto;
 import com.kfarms.entity.Supplies;
 import com.kfarms.entity.SupplyCategory;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 
 public class SuppliesMapper {
@@ -39,8 +41,13 @@ public class SuppliesMapper {
         }
 
         // auto calculate total price (quantity × unitPrice)
-        if (dto.getCategory() != null) {
-            entity.setTotalPrice(dto.getQuantity() * dto.getUnitPrice());
+        if (dto.getQuantity() != null && dto.getUnitPrice() != null) {
+            BigDecimal totalPrice = dto.getUnitPrice()
+                    .multiply(BigDecimal.valueOf(dto.getQuantity()))
+                    .setScale(2, RoundingMode.HALF_UP);
+            entity.setTotalPrice(totalPrice);
+        } else {
+            entity.setTotalPrice(BigDecimal.ZERO);
         }
 
         entity.setSupplierName(dto.getSupplierName());

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonFormat;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 
 // SALES/DISTRIBUTIONS
@@ -25,13 +26,11 @@ public class Sales extends Auditable{
     @Column(nullable = false)
     private int quantity;
 
-    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "0.##")
-    @Column(nullable = false)
-    private double unitPrice;
+    @Column(nullable = false,precision = 19, scale = 2)
+    private BigDecimal unitPrice;
 
-    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "0.##")
-    @Column(nullable = false)
-    private double totalPrice;
+    @Column(nullable = false,precision = 19, scale = 2)
+    private BigDecimal totalPrice;
 
     private String note; // nullable - returns null if not provided
     private String buyer; // nullable - returns "Walk-in customer" if not provided

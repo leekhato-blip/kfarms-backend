@@ -5,6 +5,7 @@ import com.kfarms.dto.SuppliesRequestDto;
 import com.kfarms.dto.SuppliesResponseDto;
 import com.kfarms.entity.ApiResponse;
 import com.kfarms.service.SuppliesService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
@@ -27,7 +28,8 @@ public class SuppliesController {
     // CREATE - add a new supply
     @PostMapping
     @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
-    public ResponseEntity<ApiResponse<SuppliesResponseDto>> create(@RequestBody SuppliesRequestDto dto){
+    public ResponseEntity<ApiResponse<SuppliesResponseDto>> create(
+            @Valid @RequestBody SuppliesRequestDto dto){
         SuppliesResponseDto saved = service.create(dto);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(

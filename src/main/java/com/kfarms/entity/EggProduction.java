@@ -37,7 +37,7 @@ public class EggProduction extends Auditable {
     private Integer damagedEggs = 0; // cracked or unusable eggs
 
     @Column(nullable = false)
-    private Double cratesProduced = 0.0; // optional derived field (e.g., goodEggs / 30.0)
+    private double cratesProduced = 0.0; // optional derived field (e.g., goodEggs / 30.0)
 
     private String notes;
 

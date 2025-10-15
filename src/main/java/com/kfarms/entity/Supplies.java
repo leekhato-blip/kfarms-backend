@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonFormat;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 
 // PURCHASES
@@ -24,15 +25,14 @@ public class Supplies extends Auditable{
     private SupplyCategory category; // FEED, LIVESTOCK, FISH, MEDICINE, EQUIPMENT, OTHER
 
     @Column(nullable = false)
-    private int quantity;
+    private Integer quantity;
 
-    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "0.##")
-    @Column(nullable = false)
-    private double unitPrice;
 
-    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "0.##")
-    @Column(nullable = false)
-    private double totalPrice; // auto = quantity + unitPrice
+    @Column(nullable = false,precision = 19, scale = 2)
+    private BigDecimal unitPrice;
+
+    @Column(nullable = false,precision = 19, scale = 2)
+    private BigDecimal totalPrice; // auto = quantity + unitPrice
 
     private String supplierName;
     private String note;

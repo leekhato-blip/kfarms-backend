@@ -2,6 +2,7 @@ package com.kfarms.dto;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import lombok.Data;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
@@ -12,9 +13,9 @@ public class SalesResponseDto {
     private Long id;
     private String itemName;
     private String category; // e.g. EGGS, FISH
-    private int quantity;
-    private double unitPrice;
-    private double totalPrice;
+    private Integer quantity;
+    private BigDecimal unitPrice;
+    private BigDecimal totalPrice;
     private String buyer;
     private String note;
     private LocalDate date;

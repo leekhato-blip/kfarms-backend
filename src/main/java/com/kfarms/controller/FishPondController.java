@@ -5,6 +5,7 @@ import com.kfarms.dto.FishPondResponseDto;
 import com.kfarms.dto.StockAdjustmentRequestDto;
 import com.kfarms.entity.ApiResponse;
 import com.kfarms.service.FishPondService;
+import jakarta.validation.Valid;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -29,7 +30,8 @@ public class FishPondController {
     // CREATE - add a new fishPond
     @PostMapping
     @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
-    public ResponseEntity<ApiResponse<FishPondResponseDto>> create(@RequestBody FishPondRequestDto request){
+    public ResponseEntity<ApiResponse<FishPondResponseDto>> create(
+            @Valid @RequestBody FishPondRequestDto request){
        FishPondResponseDto saved = service.create(request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(
@@ -119,6 +121,7 @@ public class FishPondController {
     @PostMapping("/{id}/adjust-stock")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<FishPondResponseDto>> adjustStock(
+            @Valid
             @PathVariable Long id,
             @RequestBody StockAdjustmentRequestDto request
     ) {

@@ -13,7 +13,7 @@ public class EggProductionResponseDto {
     private LocalDate collectionDate;
     private Integer goodEggs;
     private Integer damagedEggs;
-    private Double cratesProduced;
+    private double cratesProduced;
     private String note;
 
     private String createdBy;

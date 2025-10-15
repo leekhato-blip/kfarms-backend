@@ -4,6 +4,7 @@ import com.kfarms.dto.FishHatchRequestDto;
 import com.kfarms.dto.FishHatchResponseDto;
 import com.kfarms.entity.ApiResponse;
 import com.kfarms.service.FishHatchService;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -25,7 +26,8 @@ public class FishHatchController {
     // CREATE - create a new fishHatc record
     @PostMapping
     @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
-    public ResponseEntity<ApiResponse<FishHatchResponseDto>> create(@RequestBody FishHatchRequestDto request){
+    public ResponseEntity<ApiResponse<FishHatchResponseDto>> create(
+            @Valid @RequestBody FishHatchRequestDto request){
         FishHatchResponseDto dto = service.create(request);
         return ResponseEntity.ok(
                 new ApiResponse<>(true, "Fish hatch record created", dto)

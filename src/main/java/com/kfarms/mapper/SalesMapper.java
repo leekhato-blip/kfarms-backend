@@ -5,6 +5,8 @@ import com.kfarms.dto.SalesResponseDto;
 import com.kfarms.entity.Sales;
 import com.kfarms.entity.SalesCategory;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 
 public class SalesMapper {
@@ -47,7 +49,14 @@ public class SalesMapper {
         }
 
         // auto calculate total price (quantity * unitPrice)
-        entity.setTotalPrice(dto.getQuantity() * dto.getUnitPrice());
+        if (dto.getQuantity() != null && dto.getUnitPrice() != null) {
+            BigDecimal totalPrice = dto.getUnitPrice()
+            .multiply(BigDecimal.valueOf(dto.getQuantity()))
+                    .setScale(2, RoundingMode.HALF_UP);
+            entity.setTotalPrice(totalPrice);
+        } else {
+            entity.setTotalPrice(BigDecimal.ZERO);
+        }
 
         // default date == today if not provided
         entity.setDate(dto.getDate() != null ? dto.getDate() : LocalDate.now());

@@ -3,6 +3,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.kfarms.entity.SupplyCategory;
 import lombok.Data;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
@@ -14,8 +15,8 @@ public class SuppliesResponseDto {
     private String itemName;
     private String category;
     private int quantity;
-    private double unitPrice;
-    private double totalPrice;
+    private BigDecimal unitPrice;
+    private BigDecimal totalPrice;
     private String supplierName;
     private String note;
     private LocalDate date;

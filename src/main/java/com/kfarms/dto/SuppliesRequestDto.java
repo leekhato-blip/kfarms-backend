@@ -30,5 +30,5 @@ public class SuppliesRequestDto {
     private String note;
 
     @PastOrPresent(message = "Date cannot be in the future")
-    private LocalDate date;
+    private LocalDate supplyDate;
 }

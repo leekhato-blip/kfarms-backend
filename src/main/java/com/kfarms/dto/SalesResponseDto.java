@@ -18,7 +18,7 @@ public class SalesResponseDto {
     private BigDecimal totalPrice;
     private String buyer;
     private String note;
-    private LocalDate date;
+    private LocalDate salesDate;
 
     // audit
     private String createdBy;

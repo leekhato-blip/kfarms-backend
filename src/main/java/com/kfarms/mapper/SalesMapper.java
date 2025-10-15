@@ -19,7 +19,7 @@ public class SalesMapper {
         dto.setUnitPrice(entity.getUnitPrice());
         dto.setTotalPrice(entity.getTotalPrice());
         dto.setQuantity(entity.getQuantity());
-        dto.setDate(entity.getDate());
+        dto.setSalesDate(entity.getSalesDate());
         dto.setNote(entity.getNote());
 
         // audit
@@ -59,7 +59,7 @@ public class SalesMapper {
         }
 
         // default date == today if not provided
-        entity.setDate(dto.getDate() != null ? dto.getDate() : LocalDate.now());
+        entity.setSalesDate(dto.getSalesDate() != null ? dto.getSalesDate() : LocalDate.now());
         return entity;
     }
 }

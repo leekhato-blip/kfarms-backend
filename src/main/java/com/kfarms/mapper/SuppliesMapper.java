@@ -19,7 +19,7 @@ public class SuppliesMapper {
         dto.setQuantity(entity.getQuantity());
         dto.setUnitPrice(entity.getUnitPrice());
         dto.setTotalPrice(entity.getTotalPrice());
-        dto.setDate(entity.getDate());
+        dto.setDate(entity.getSupplyDate());
 
         // audits
         dto.setCreatedBy(entity.getCreatedBy());
@@ -51,7 +51,7 @@ public class SuppliesMapper {
         }
 
         entity.setSupplierName(dto.getSupplierName());
-        entity.setDate(dto.getDate() != null ? dto.getDate() : LocalDate.now());
+        entity.setSupplyDate(dto.getSupplyDate() != null ? dto.getSupplyDate() : LocalDate.now());
         return entity;
     }
 }

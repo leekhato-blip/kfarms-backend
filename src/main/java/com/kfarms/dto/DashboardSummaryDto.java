@@ -14,8 +14,8 @@ public class DashboardSummaryDto {
     private int totalFishStock;
     private int totalFeeds; // total feed types
     private double totalFeedQuantity; // sum of quantities used
-    private int totalEggsProduced;
-    private int totalEggsProducedThisMonth;
+    private double totalCratesProduced;
+    private double totalCratesProducedThisMonth;
     private BigDecimal totalRevenue;
     private BigDecimal totalRevenueThisMonth;
     private BigDecimal totalExpenses;

@@ -38,5 +38,5 @@ public class Supplies extends Auditable{
     private String note;
 
     @Column(nullable = false)
-    private LocalDate date = LocalDate.now(); // default today
+    private LocalDate supplyDate = LocalDate.now(); // default today
 }

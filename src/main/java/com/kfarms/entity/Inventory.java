@@ -25,7 +25,7 @@ public class Inventory extends Auditable{
     private InventoryCategory category; // e.g. FEED, MEDICINE, TOOL
 
     @Column(nullable = false)
-    private int quantity;
+    private Integer quantity;
 
     @Column(nullable = false)
     private int minThreshold = 0;

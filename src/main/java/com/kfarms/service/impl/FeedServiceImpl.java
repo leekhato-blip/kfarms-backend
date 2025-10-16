@@ -10,7 +10,9 @@ import com.kfarms.mapper.FeedMapper;
 import com.kfarms.repository.FeedRepository;
 import com.kfarms.service.FeedService;
 import com.kfarms.service.InventoryService;
+import com.kfarms.service.NotificationService;
 import jakarta.persistence.criteria.Predicate;
+import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -24,15 +26,12 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
-
+@RequiredArgsConstructor
 public class FeedServiceImpl implements FeedService {
     private final FeedRepository repo;
     private final InventoryService inventoryService;
+    private final NotificationService notification;
 
-    public FeedServiceImpl(FeedRepository repo, InventoryService inventoryService) {
-        this.repo = repo;
-        this.inventoryService = inventoryService;
-    }
 
     // CREATE - add new feed
     @Override
@@ -208,6 +207,21 @@ public class FeedServiceImpl implements FeedService {
                 .filter(Objects::nonNull)
                 .max(LocalDateTime::compareTo)
                 .ifPresent(lastDate -> summary.put("lastFeedDate", lastDate));
+        if (usedThisMonth > 100) {
+            notification.createNotification(
+                    "FEED",
+                    "High Feed Usage",
+                    "Feed usage for this month has exceeded 100kg"
+            );
+        }
+
+        if (totalQuantityUsed < 100) {
+            notification.createNotification(
+                    "FEED",
+                    "Low Feed Activity",
+                    "Feed consumption appears unusually low this month"
+            );
+        }
 
         return summary;
     }

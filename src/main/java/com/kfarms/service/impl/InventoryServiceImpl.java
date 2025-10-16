@@ -8,7 +8,9 @@ import com.kfarms.exceptions.ResourceNotFoundException;
 import com.kfarms.mapper.InventoryMapper;
 import com.kfarms.repository.InventoryRepository;
 import com.kfarms.service.InventoryService;
+import com.kfarms.service.NotificationService;
 import jakarta.persistence.criteria.Predicate;
+import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -21,13 +23,11 @@ import java.time.LocalDateTime;
 import java.util.*;
 
 @Service
+@RequiredArgsConstructor
 public class InventoryServiceImpl implements InventoryService {
+
     private final InventoryRepository repo;
-
-    public InventoryServiceImpl(InventoryRepository repo) {
-        this.repo = repo;
-    }
-
+    private final NotificationService notification;
 
     // CREATE - add new inventory item
     @Override
@@ -175,6 +175,13 @@ public class InventoryServiceImpl implements InventoryService {
                     m.put("itemName", i.getItemName());
                     m.put("quantity", i.getQuantity());
                     m.put("threshold", i.getMinThreshold());
+
+                    // 🟣 Trigger notification when item is below threshold
+                    notification.createNotification(
+                            "GENERAL",
+                            "Low Stock Alert: " + i.getItemName(),
+                            "Item '" + i.getItemName() + "' is running low. (" + i.getQuantity() + " " + i.getUnit() + " left)"
+                    );
                     return m;
                 })
                 .toList();
@@ -186,6 +193,7 @@ public class InventoryServiceImpl implements InventoryService {
                 .filter(Objects::nonNull)
                 .max(LocalDate::compareTo)
                 .ifPresent(last -> summary.put("lastUpdated", last));
+
         return summary;
     }
 

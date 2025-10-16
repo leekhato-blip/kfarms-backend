@@ -9,8 +9,10 @@ import com.kfarms.exceptions.ResourceNotFoundException;
 import com.kfarms.mapper.SalesMapper;
 import com.kfarms.repository.SalesRepository;
 import com.kfarms.service.InventoryService;
+import com.kfarms.service.NotificationService;
 import com.kfarms.service.SalesService;
 import jakarta.persistence.criteria.Predicate;
+import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -25,13 +27,13 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
+@RequiredArgsConstructor
 public class SalesServiceImpl implements SalesService {
+
     private final SalesRepository repo;
     private final InventoryService inventoryService;
-    public SalesServiceImpl(SalesRepository repo, InventoryService inventoryService){
-        this.repo = repo;
-        this.inventoryService = inventoryService;
-    }
+    private final NotificationService notification;
+
 
     // CREATE - add a new sale item
     @Override
@@ -170,7 +172,6 @@ public class SalesServiceImpl implements SalesService {
                 .map(Sales::getTotalPrice)
                 .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-
         summary.put("totalRevenue", totalRevenue);
 
         // 🟣 Total count by category
@@ -193,29 +194,62 @@ public class SalesServiceImpl implements SalesService {
                                 ));
         summary.put("revenueByCategory", revenueByCategory);
 
-        // 🟣 Monthly revenue
-        BigDecimal revenueThisMonth = all.stream()
-                .filter(s -> s.getDate() != null &&
-                             s.getDate().getMonth() == LocalDate.now().getMonth() &&
-                             s.getDate().getYear() == LocalDate.now().getYear())
-                .map(Sales::getTotalPrice)
-                .filter(Objects::nonNull)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        summary.put("revenueThisMonth", revenueThisMonth);
-
         // 🟣 Annual revenue
         BigDecimal revenueThisYear = all.stream()
-                .filter(s -> s.getDate() != null && s.getDate().getYear() == (LocalDate.now().getYear()))
+                .filter(s -> s.getSalesDate() != null && s.getSalesDate().getYear() == (LocalDate.now().getYear()))
                 .map(Sales::getTotalPrice)
                 .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-
         summary.put("revenueThisYear", revenueThisYear);
+
+
+        // 🟣 Monthly revenue
+        BigDecimal revenueThisMonth = all.stream()
+                .filter(s -> s.getSalesDate() != null &&
+                             s.getSalesDate().getMonth() == LocalDate.now().getMonth() &&
+                             s.getSalesDate().getYear() == LocalDate.now().getYear())
+                .map(Sales::getTotalPrice)
+                .filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        summary.put("revenueThisMonth", revenueThisMonth);
+
+        // 🟣 Revenue last month (for comparison)
+        LocalDate lastMonth = LocalDate.now().minusMonths(1);
+        BigDecimal revenueLastMonth = all.stream()
+                .filter(s -> s.getSalesDate() != null &&
+                                s.getSalesDate().getMonth() == LocalDate.now().getMonth() &&
+                                s.getSalesDate().getYear() == LocalDate.now().getYear())
+                .map(Sales::getTotalPrice)
+                .filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        summary.put("revenueLastMonth", revenueLastMonth);
+
+        // 🟣 Compare and Notify if there’s a drop
+        if (revenueLastMonth.compareTo(BigDecimal.ZERO) > 0 &&
+        revenueThisMonth.compareTo(revenueLastMonth) < 0) {
+            notification.createNotification(
+                    "FINANCE",
+                    "Revenue Drop Alert",
+                    "This month's revenue (" + revenueThisMonth + ") is lower than last month " + revenueLastMonth + ")."
+            );
+        }
+
+        // 🟣 No sales in the past 7 days
+        LocalDate sevenDaysAgo = LocalDate.now().minusDays(7);
+        boolean noSales = all.stream()
+                .noneMatch(s -> s.getSalesDate() != null && s.getSalesDate().isAfter(sevenDaysAgo));
+
+        if (noSales) {
+            notification.createNotification(
+                    "FINANCE",
+                    "No Sales Activity",
+                    "No sales have been recorded in the last 7 days."
+            );
+        }
 
         // 🟣 Last Sales Date
         all.stream()
-                .map(Sales::getDate)
+                .map(Sales::getSalesDate)
                 .filter(Objects::nonNull)
                 .max(LocalDate::compareTo)
                 .ifPresent(last -> summary.put("lastSalesDate", last));

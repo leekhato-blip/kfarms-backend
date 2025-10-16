@@ -11,6 +11,7 @@ import com.kfarms.mapper.LivestockMapper;
 import com.kfarms.repository.EggProductionRepo;
 import com.kfarms.repository.LivestockRepository;
 import com.kfarms.service.LivestockService;
+import com.kfarms.service.NotificationService;
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -30,6 +31,7 @@ import java.util.stream.Collectors;
 public class LivestockServiceImpl implements LivestockService {
     private final LivestockRepository repo;
     private final EggProductionRepo eggRepo;
+    private final NotificationService notification;
 
     // CREATE - create Livestock
     @Override
@@ -136,6 +138,11 @@ public class LivestockServiceImpl implements LivestockService {
 
         // Handle quantity & mortality smartly
         if (request.getMortality() != null && request.getMortality() > 0) {
+            notification.createNotification(
+                    "LIVESTOCK",
+                    "Mortality Recorded",
+                    request.getMortality() + " deaths recorded in batch " + entity.getBatchName()
+            );
             int currentMortality = entity.getMortality() != null ? entity.getMortality() : 0;
             int currentQty = (entity.getCurrentStock() != null) ? entity.getCurrentStock() : 0;
 
@@ -216,6 +223,22 @@ public class LivestockServiceImpl implements LivestockService {
                         Collectors.summingLong(l -> l.getCurrentStock() != null ? l.getCurrentStock() : 0)
                 ));
         summary.put("countByType", countByType);
+
+        // ==== NOTIFICATIONS ====
+        if (totalQuantity < 50) {
+            notification.createNotification(
+                    "LIVESTOCK",
+                    "Low Livestock Count",
+                    "Total livestock count has dropped below 50. Please inspect"
+            );
+        }
+        if (totalMortality > 20) {
+            notification.createNotification(
+                    "LIVESTOCK",
+                    "High Mortality Alert",
+                    "More than 20 deaths record. Investigate possible disease or stress factors"
+            );
+        }
 
         return summary;
     }

@@ -8,8 +8,10 @@ import com.kfarms.exceptions.ResourceNotFoundException;
 import com.kfarms.mapper.SuppliesMapper;
 import com.kfarms.repository.SuppliesRepository;
 import com.kfarms.service.InventoryService;
+import com.kfarms.service.NotificationService;
 import com.kfarms.service.SuppliesService;
 import jakarta.persistence.criteria.Predicate;
+import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -24,13 +26,13 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
+@RequiredArgsConstructor
 public class SuppliesServiceImpl implements SuppliesService {
+
     private final SuppliesRepository repo;
     private final InventoryService inventoryService;
-    public SuppliesServiceImpl(SuppliesRepository repo, InventoryService inventoryService) {
-        this.repo = repo;
-        this.inventoryService = inventoryService;
-    }
+    private final NotificationService notification;
+
 
     // CREATE - add new supply item
     @Override
@@ -112,7 +114,7 @@ public class SuppliesServiceImpl implements SuppliesService {
         entity.setSupplierName(request.getSupplierName());
         entity.setQuantity(request.getQuantity());
         entity.setUnitPrice(request.getUnitPrice());
-        entity.setDate(request.getDate());
+        entity.setSupplyDate(request.getSupplyDate());
         entity.setUpdatedBy(updatedBy);
 
         repo.save(entity);
@@ -204,13 +206,39 @@ public class SuppliesServiceImpl implements SuppliesService {
 
         summary.put("amountBySupplier", amountBySupplier);
 
+        // ==== ALERTS ====
+        if (totalQuantity < 10) {
+            notification.createNotification(
+                    "SUPPLIES",
+                    "Low Supply Stock",
+                    "Overall supplies are running low. Current total quantity: " + totalQuantity
+            );
+        }
+
+        BigDecimal limit = new BigDecimal("500000");
+        if (totalAmount.compareTo(limit) > 0) {
+            notification.createNotification(
+                    "FINANCE",
+                    "High Supply Expenses",
+                    "This mont's total expenses on supplies have exceeded ₦500,000"
+            );
+        }
 
         // 🟣 last supply date
         all.stream()
-                .map(Supplies::getDate)
+                .map(Supplies::getSupplyDate)
                 .filter(Objects::nonNull)
                 .max(LocalDate::compareTo)
-                .ifPresent(lastDate -> summary.put("lastSupplyDate", lastDate));
+                .ifPresent(lastDate -> {
+                    if (lastDate.isBefore(LocalDate.now().minusDays(30))) {
+                        notification.createNotification(
+                                "SUPPLIES",
+                                "No Recent Supply",
+                                "No new supplies have been recorded since " + lastDate
+                        );
+                    }
+                });
+
 
         return summary;
     }

@@ -9,6 +9,7 @@ import com.kfarms.mapper.EggProductionMapper;
 import com.kfarms.repository.EggProductionRepo;
 import com.kfarms.repository.LivestockRepository;
 import com.kfarms.service.EggProductionService;
+import com.kfarms.service.NotificationService;
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.*;
@@ -25,6 +26,7 @@ import java.util.stream.Collectors;
 public class EggProductionServiceImpl implements EggProductionService {
     private final EggProductionRepo repo;
     private final LivestockRepository livestockRepo;
+    private final NotificationService notification;
 
     // CREATE
     @Override
@@ -176,6 +178,31 @@ public class EggProductionServiceImpl implements EggProductionService {
         summary.put("monthlyCracked", monthlyDamaged);
         summary.put("monthlyCratesProduced", monthlyCrates);
         summary.put("countByBatch", countByBatch);
+
+        // ==== NOTIFICATION ====
+        if (monthlyCrates < 5) {
+            notification.createNotification(
+                    "LAYER",
+                    "Low Egg production",
+                    "Egg production this month is below expected levels."
+            );
+        }
+
+        if (monthlyDamaged > (monthlyGood * 0.2)) {
+            notification.createNotification(
+                    "LAYER",
+                    "High Damaged Eggs",
+                    "More than 20% of eggs collected this month are damaged."
+            );
+        }
+
+        if (monthly.isEmpty()) {
+            notification.createNotification(
+                    "LAYER",
+                    "No Egg Records",
+                    "No egg production recorded for this month yet."
+            );
+        }
 
         return summary;
     }

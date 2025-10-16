@@ -15,6 +15,14 @@ import java.util.List;
 public class NotificationController {
     private final NotificationService notificationService;
 
+    @GetMapping("/all")
+    public ResponseEntity<ApiResponse<List<Notification>>> getAllNotifications() {
+        List<Notification> response = notificationService.getAllNotification();
+        return ResponseEntity.ok(
+                new ApiResponse<>(true, "All notifications fetched", response)
+        );
+    }
+
     @GetMapping
     public ResponseEntity<ApiResponse<List<Notification>>>  getUnreadNotification() {
         List<Notification> response = notificationService.getUnreadNotification();
@@ -28,6 +36,14 @@ public class NotificationController {
         notificationService.markAsRead(id);
         return ResponseEntity.ok(
                 new ApiResponse<>(true, "Notification marked as read", null)
+        );
+    }
+
+    @PostMapping("/mark-read")
+    public ResponseEntity<ApiResponse<String>> markMultipleAsRead(@RequestBody List<Long> ids) {
+        notificationService.markMultipleAsRead(ids);
+        return ResponseEntity.ok(
+                new ApiResponse<>(true, "Notifications marked as read", null)
         );
     }
 }

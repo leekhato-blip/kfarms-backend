@@ -9,6 +9,7 @@ import com.kfarms.mapper.FishHatchMapper;
 import com.kfarms.repository.FishHatchRepository;
 import com.kfarms.repository.FishPondRepository;
 import com.kfarms.service.FishHatchService;
+import com.kfarms.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -24,6 +25,7 @@ public class FishHatchServiceImpl implements FishHatchService {
 
     private final FishHatchRepository hatchRepo;
     private final FishPondRepository pondRepo;
+    private final NotificationService notification;
 
 
     // CREATE
@@ -152,16 +154,16 @@ public class FishHatchServiceImpl implements FishHatchService {
         summary.put("totalHatchRecords", totalRecords);
         summary.put("hatchCountByPond", hatchCountByPond);
 
+
+        // ==== NOTIFICATION ====
+        if (totalRecords == 0) {
+            notification.createNotification(
+                    "FISH",
+                    "No Hatch Records Found",
+                    "There are no fish hatch records in the system."
+            );
+        }
+
         return summary;
-//        long totalRecords = hatchRepo.count();
-//        Map<String, Long> hatchCountByPond = pondRepo.findAll()
-//                .stream()
-//                .filter(f -> !Boolean.TRUE.equals(f.getDeleted()))
-//                .collect(Collectors.toMap(FishPond::getPondName, p -> hatchRepo.countByPond(p.getId())));
-//
-//        Map<String, Object> summary = new HashMap<>();
-//        summary.put("totalHatchRecords", totalRecords);
-//        summary.put("hatchCountByPond", hatchCountByPond);
-//        return summary;
     }
 }

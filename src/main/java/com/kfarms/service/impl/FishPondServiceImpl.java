@@ -11,7 +11,9 @@ import com.kfarms.exceptions.ResourceNotFoundException;
 import com.kfarms.mapper.FishPondMapper;
 import com.kfarms.repository.FishPondRepository;
 import com.kfarms.service.FishPondService;
+import com.kfarms.service.NotificationService;
 import jakarta.persistence.criteria.Predicate;
+import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -26,9 +28,11 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
+@RequiredArgsConstructor
 public class FishPondServiceImpl implements FishPondService {
+
     private final FishPondRepository repo;
-    public FishPondServiceImpl(FishPondRepository repo){this.repo = repo;}
+    private final NotificationService notification;
 
     // CREATE - add new fishPond
     public FishPondResponseDto create(FishPondRequestDto dto){
@@ -220,33 +224,36 @@ public class FishPondServiceImpl implements FishPondService {
 
         Map<String, Object> summary = new HashMap<>();
 
-        // Total FishPond record
-        summary.put("totalFishPonds", all.size());
         // Total quantity
-        summary.put("totalFishes", all.stream()
+        int totalFishes = all.stream()
                 .mapToInt(f -> Optional.ofNullable(f.getCurrentStock()).orElse(0))
-                .sum());
+                .sum();
 
         // Total capacity
-        summary.put("totalQuantity", all.stream()
+        int totalQuantity = all.stream()
                 .mapToInt(f -> Optional.ofNullable(f.getCapacity()).orElse(0))
-                .sum());
+                .sum();
 
         // Total Mortality
-        summary.put("totalMortality", all.stream()
+        int totalMortality = all.stream()
                 .mapToInt(f -> Optional.ofNullable(f.getMortalityCount()).orElse(0))
-                .sum());
+                .sum();
 
         // status breakdown
         Map<String, Long> countByStatus = all.stream()
                         .filter(f -> f.getStatus() != null)
                         .collect(Collectors.groupingBy(f -> f.getStatus().name(), Collectors.counting()));
-        summary.put("countByStatus", countByStatus);
 
         // total by pondType
         Map<String, Long> countByType = all.stream()
                         .filter(f -> f.getPondType() != null)
                                 .collect(Collectors.groupingBy(f -> f.getPondType().name(), Collectors.counting()));
+
+        summary.put("totalFishPonds", all.size()); // Total FishPond record
+        summary.put("totalFishes", totalFishes);
+        summary.put("totalQuantity", totalQuantity);
+        summary.put("totalMortality", totalMortality);
+        summary.put("countByStatus", countByStatus);
         summary.put("countByPondType", countByType);
 
         // last water changed (latest)
@@ -255,6 +262,51 @@ public class FishPondServiceImpl implements FishPondService {
                 .filter(Objects::nonNull)
                 .max(LocalDate::compareTo)
                 .ifPresent(last -> summary.put("lastUpdated", last));
+
+
+
+        // === 🌟 ALERT LOGIC ===
+        Map<String, Object> alerts = new HashMap<>();
+
+        // 🐟 Low Stock Alert
+        if (totalFishes < 100) {
+            alerts.put("fishLow", "Fish stock is below normal levels!");
+            notification.createNotification("FISH",
+                    "Low Fish Stock",
+                    "Total fish count is below 100."
+            );
+        }
+
+        // ⚠️ High Mortality Alert
+        if (totalFishes > 0) {
+            double mortalityRate = (double) totalMortality / totalFishes * 100;
+            if (mortalityRate > 10) {
+                alerts.put("highMortality", "High mortality detected in fish ponds!");
+                notification.createNotification(
+                        "FISH",
+                        "High Mortality",
+                        String.format("Mortality rate is %.2f%% — above 10%% threshold.", mortalityRate));
+            }
+        }
+
+        //  💧 Water Change Reminder
+        LocalDate today = LocalDate.now();
+        List<FishPond> dueForWaterChange = all.stream()
+                .filter(f -> {
+                    LocalDate nextChange = calculateNextWaterChange(f);
+                    return nextChange != null && !nextChange.isAfter(today);
+                })
+                .toList();
+
+        if (!dueForWaterChange.isEmpty()) {
+            alerts.put("waterChangeDue", dueForWaterChange.size() + " pond(s) need water change.");
+            notification.createNotification(
+                    "Fish",
+                    "Water Change Due",
+                    dueForWaterChange.size() + " pond(s) require water change today or earlier."
+            );
+        }
+        summary.put("alerts", alerts);
         return summary;
     }
 

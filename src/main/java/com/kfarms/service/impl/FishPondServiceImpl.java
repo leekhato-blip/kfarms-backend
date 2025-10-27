@@ -21,7 +21,6 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
-import javax.swing.text.html.Option;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
@@ -271,9 +270,11 @@ public class FishPondServiceImpl implements FishPondService {
         // 🐟 Low Stock Alert
         if (totalFishes < 100) {
             alerts.put("fishLow", "Fish stock is below normal levels!");
-            notification.createNotification("FISH",
+            notification.createNotification(
+                    "FISH",
                     "Low Fish Stock",
-                    "Total fish count is below 100."
+                    "Total fish count is below 100.",
+                    null
             );
         }
 
@@ -284,8 +285,9 @@ public class FishPondServiceImpl implements FishPondService {
                 alerts.put("highMortality", "High mortality detected in fish ponds!");
                 notification.createNotification(
                         "FISH",
-                        "High Mortality",
-                        String.format("Mortality rate is %.2f%% — above 10%% threshold.", mortalityRate));
+                        "High Mortality", String.format("Mortality rate is %.2f%% — above 10%% threshold.", mortalityRate),
+                        null
+                );
             }
         }
 
@@ -303,7 +305,8 @@ public class FishPondServiceImpl implements FishPondService {
             notification.createNotification(
                     "Fish",
                     "Water Change Due",
-                    dueForWaterChange.size() + " pond(s) require water change today or earlier."
+                    dueForWaterChange.size() + " pond(s) require water change today or earlier.",
+                    null
             );
         }
         summary.put("alerts", alerts);

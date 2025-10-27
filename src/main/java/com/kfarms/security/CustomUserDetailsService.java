@@ -1,7 +1,7 @@
 package com.kfarms.security;
 
 import com.kfarms.entity.AppUser;
-import com.kfarms.repository.UserRepository;
+import com.kfarms.repository.AppUserRepository;
 import lombok.AllArgsConstructor;
 import org.springframework.context.annotation.Primary;
 import org.springframework.security.core.userdetails.User;
@@ -14,7 +14,7 @@ import org.springframework.stereotype.Service;
 @AllArgsConstructor
 @Primary
 public class CustomUserDetailsService implements UserDetailsService {
-    private final UserRepository userRepo;
+    private final AppUserRepository userRepo;
 
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
@@ -23,7 +23,7 @@ public class CustomUserDetailsService implements UserDetailsService {
 
         return User.withUsername(user.getUsername())
                 .password(user.getPassword())
-                .roles(user.getRole()) // e.g. ADMIN
+                .roles(user.getRole().name()) // e.g. ADMIN
                 .build();
     }
 

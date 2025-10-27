@@ -138,11 +138,12 @@ public class LivestockServiceImpl implements LivestockService {
 
         // Handle quantity & mortality smartly
         if (request.getMortality() != null && request.getMortality() > 0) {
+            // NOTIFICATION
             notification.createNotification(
                     "LIVESTOCK",
                     "Mortality Recorded",
-                    request.getMortality() + " deaths recorded in batch " + entity.getBatchName()
-            );
+                    request.getMortality() + " deaths recorded in batch " + entity.getBatchName(),
+                    null);
             int currentMortality = entity.getMortality() != null ? entity.getMortality() : 0;
             int currentQty = (entity.getCurrentStock() != null) ? entity.getCurrentStock() : 0;
 
@@ -229,15 +230,15 @@ public class LivestockServiceImpl implements LivestockService {
             notification.createNotification(
                     "LIVESTOCK",
                     "Low Livestock Count",
-                    "Total livestock count has dropped below 50. Please inspect"
-            );
+                    "Total livestock count has dropped below 50. Please inspect",
+                    null);
         }
         if (totalMortality > 20) {
             notification.createNotification(
                     "LIVESTOCK",
                     "High Mortality Alert",
-                    "More than 20 deaths record. Investigate possible disease or stress factors"
-            );
+                    "More than 20 deaths record. Investigate possible disease or stress factors",
+                    null);
         }
 
         return summary;

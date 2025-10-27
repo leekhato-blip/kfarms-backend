@@ -1,9 +1,6 @@
 package com.kfarms.entity;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.Id;
+import jakarta.persistence.*;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 
@@ -17,5 +14,7 @@ public class AppUser extends Auditable{
     @Column(unique = true)
     private String username;
     private String password;
-    private String role;
+
+    @Enumerated(EnumType.STRING)
+    private Role role;
 }

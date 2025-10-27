@@ -39,7 +39,7 @@ public class EggProduction extends Auditable {
     @Column(nullable = false)
     private double cratesProduced = 0.0; // optional derived field (e.g., goodEggs / 30.0)
 
-    private String notes;
+    private String note;
 
     public void calculateCrates() {
         if (goodEggs != null && goodEggs > 0) {

@@ -10,7 +10,6 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -131,7 +130,11 @@ public class DashboardServiceImpl implements DashboardService {
         Map<String, Object> alerts = new HashMap<>();
         if (totalFeedQuantity < 5) {
             alerts.put("feedLow", "Feed stock is running low");
-            notificationService.createNotification("FEED", "Feed Low", "Feed stock is running low");
+            notificationService.createNotification(
+                    "FEED", "Feed Low",
+                    "Feed stock is running low",
+                    null
+            );
         }
         if (totalFishStock < 100) {
             alerts.put("fishLow", "Fish stock is low");

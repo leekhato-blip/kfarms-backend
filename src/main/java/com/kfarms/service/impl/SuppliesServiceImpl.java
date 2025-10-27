@@ -2,7 +2,9 @@ package com.kfarms.service.impl;
 
 import com.kfarms.dto.SuppliesRequestDto;
 import com.kfarms.dto.SuppliesResponseDto;
+import com.kfarms.entity.AppUser;
 import com.kfarms.entity.InventoryCategory;
+import com.kfarms.entity.Role;
 import com.kfarms.entity.Supplies;
 import com.kfarms.exceptions.ResourceNotFoundException;
 import com.kfarms.mapper.SuppliesMapper;
@@ -154,7 +156,7 @@ public class SuppliesServiceImpl implements SuppliesService {
 
     // SUMMARY
     @Override
-    public Map<String, Object> getSummary() {
+    public Map<String, Object> getSummary(AppUser user) {
         List<Supplies> all = repo.findAll()
                 .stream()
                 .filter(s -> !Boolean.TRUE.equals(s.getDeleted()))
@@ -211,7 +213,8 @@ public class SuppliesServiceImpl implements SuppliesService {
             notification.createNotification(
                     "SUPPLIES",
                     "Low Supply Stock",
-                    "Overall supplies are running low. Current total quantity: " + totalQuantity
+                    "Overall supplies are running low. Current total quantity: " + totalQuantity,
+                    null
             );
         }
 
@@ -220,7 +223,8 @@ public class SuppliesServiceImpl implements SuppliesService {
             notification.createNotification(
                     "FINANCE",
                     "High Supply Expenses",
-                    "This mont's total expenses on supplies have exceeded ₦500,000"
+                    "This month's total expenses on supplies have exceeded ₦500,000",
+                    user
             );
         }
 
@@ -234,7 +238,8 @@ public class SuppliesServiceImpl implements SuppliesService {
                         notification.createNotification(
                                 "SUPPLIES",
                                 "No Recent Supply",
-                                "No new supplies have been recorded since " + lastDate
+                                "No new supplies have been recorded since " + lastDate,
+                                null
                         );
                     }
                 });

@@ -184,7 +184,8 @@ public class EggProductionServiceImpl implements EggProductionService {
             notification.createNotification(
                     "LAYER",
                     "Low Egg production",
-                    "Egg production this month is below expected levels."
+                    "Egg production this month is below expected levels.",
+                    null
             );
         }
 
@@ -192,7 +193,8 @@ public class EggProductionServiceImpl implements EggProductionService {
             notification.createNotification(
                     "LAYER",
                     "High Damaged Eggs",
-                    "More than 20% of eggs collected this month are damaged."
+                    "More than 20% of eggs collected this month are damaged.",
+                    null
             );
         }
 
@@ -200,7 +202,8 @@ public class EggProductionServiceImpl implements EggProductionService {
             notification.createNotification(
                     "LAYER",
                     "No Egg Records",
-                    "No egg production recorded for this month yet."
+                    "No egg production recorded for this month yet.",
+                    null
             );
         }
 

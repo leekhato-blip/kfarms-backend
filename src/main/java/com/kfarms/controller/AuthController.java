@@ -3,7 +3,8 @@ package com.kfarms.controller;
 import com.kfarms.dto.LoginResponse;
 import com.kfarms.entity.ApiResponse;
 import com.kfarms.entity.AppUser;
-import com.kfarms.repository.UserRepository;
+import com.kfarms.entity.Role;
+import com.kfarms.repository.AppUserRepository;
 import com.kfarms.security.JwtService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -21,12 +22,12 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/auth") // All routes under /api/auth
 public class AuthController {
     private final JwtService jwtService;
-    private final UserRepository userRepo;
+    private final AppUserRepository userRepo;
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authManager;
 
-    // Inject UserRepository and PasswordEncoder through constructor
-    public AuthController(UserRepository userRepo,
+    // Inject AppUserRepository and PasswordEncoder through constructor
+    public AuthController(AppUserRepository userRepo,
                           PasswordEncoder passwordEncoder,
                           AuthenticationManager authManager,
                           JwtService jwtService) {
@@ -48,7 +49,7 @@ public class AuthController {
 
         // Encode the password using BCrypt
         user.setPassword(passwordEncoder.encode(user.getPassword()));
-        user.setRole("USER"); // default role
+        user.setRole(Role.STAFF); // default role
 
         // Save the new user in the database
         userRepo.save(user);

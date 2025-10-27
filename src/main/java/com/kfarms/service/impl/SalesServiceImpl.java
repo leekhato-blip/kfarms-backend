@@ -230,7 +230,8 @@ public class SalesServiceImpl implements SalesService {
             notification.createNotification(
                     "FINANCE",
                     "Revenue Drop Alert",
-                    "This month's revenue (" + revenueThisMonth + ") is lower than last month " + revenueLastMonth + ")."
+                    "This month's revenue (" + revenueThisMonth + ") is lower than last month " + revenueLastMonth + ").",
+                    null
             );
         }
 
@@ -243,7 +244,8 @@ public class SalesServiceImpl implements SalesService {
             notification.createNotification(
                     "FINANCE",
                     "No Sales Activity",
-                    "No sales have been recorded in the last 7 days."
+                    "No sales have been recorded in the last 7 days.",
+                    null
             );
         }
 

@@ -15,7 +15,7 @@ public class EggProductionMapper {
         }
         entity.setGoodEggs(request.getGoodEggs());
         entity.setDamagedEggs(request.getDamagedEggs());
-        entity.setNotes(request.getNote());
+        entity.setNote(request.getNote());
         entity.calculateCrates();
         return entity;
     }
@@ -29,7 +29,7 @@ public class EggProductionMapper {
         response.setGoodEggs(entity.getGoodEggs());
         response.setDamagedEggs(entity.getDamagedEggs());
         response.setCratesProduced(entity.getCratesProduced());
-        response.setNote(entity.getNotes());
+        response.setNote(entity.getNote());
 
         response.setCreatedBy(entity.getCreatedBy());
         response.setUpdatedBy(entity.getUpdatedBy());

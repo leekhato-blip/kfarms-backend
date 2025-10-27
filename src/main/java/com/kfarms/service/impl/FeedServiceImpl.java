@@ -211,7 +211,8 @@ public class FeedServiceImpl implements FeedService {
             notification.createNotification(
                     "FEED",
                     "High Feed Usage",
-                    "Feed usage for this month has exceeded 100kg"
+                    "Feed usage for this month has exceeded 100kg",
+                    null
             );
         }
 
@@ -219,7 +220,8 @@ public class FeedServiceImpl implements FeedService {
             notification.createNotification(
                     "FEED",
                     "Low Feed Activity",
-                    "Feed consumption appears unusually low this month"
+                    "Feed consumption appears unusually low this month",
+                    null
             );
         }
 

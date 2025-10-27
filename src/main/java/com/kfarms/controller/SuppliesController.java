@@ -4,6 +4,7 @@ package com.kfarms.controller;
 import com.kfarms.dto.SuppliesRequestDto;
 import com.kfarms.dto.SuppliesResponseDto;
 import com.kfarms.entity.ApiResponse;
+import com.kfarms.entity.AppUser;
 import com.kfarms.service.SuppliesService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -106,8 +107,9 @@ public class SuppliesController {
     // SUMMARY - dashboard, reports and analysis
     @GetMapping("/summary")
     @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER') or hasRole('STAFF')")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> summary() {
-        Map<String, Object> summary = service.getSummary();
+    public ResponseEntity<ApiResponse<Map<String, Object>>> summary(Authentication auth) {
+        AppUser user = (AppUser) auth.getPrincipal();
+        Map<String, Object> summary = service.getSummary(user);
         return ResponseEntity.ok(
                 new ApiResponse<>(true, "Supply summary fetched", summary)
         );

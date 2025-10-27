@@ -7,7 +7,7 @@ import com.kfarms.dto.StockAdjustmentRequestDto;
 import com.kfarms.entity.ApiResponse;
 import com.kfarms.service.LivestockService;
 import jakarta.validation.Valid;
-import lombok.RequiredArgsConstructor;
+import lombok.AllArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -23,7 +23,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/livestock")
-@RequiredArgsConstructor
+@AllArgsConstructor
 @Validated
 public class LivestockController {
     private final LivestockService service;

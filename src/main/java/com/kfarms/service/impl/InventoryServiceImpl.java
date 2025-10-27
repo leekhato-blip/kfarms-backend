@@ -180,7 +180,8 @@ public class InventoryServiceImpl implements InventoryService {
                     notification.createNotification(
                             "GENERAL",
                             "Low Stock Alert: " + i.getItemName(),
-                            "Item '" + i.getItemName() + "' is running low. (" + i.getQuantity() + " " + i.getUnit() + " left)"
+                            "Item '" + i.getItemName() + "' is running low. (" + i.getQuantity() + " " + i.getUnit() + " left)",
+                            null
                     );
                     return m;
                 })

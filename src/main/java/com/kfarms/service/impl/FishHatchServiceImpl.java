@@ -160,7 +160,8 @@ public class FishHatchServiceImpl implements FishHatchService {
             notification.createNotification(
                     "FISH",
                     "No Hatch Records Found",
-                    "There are no fish hatch records in the system."
+                    "There are no fish hatch records in the system.",
+                    null
             );
         }
 

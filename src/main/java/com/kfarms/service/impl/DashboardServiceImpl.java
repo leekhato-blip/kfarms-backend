@@ -97,6 +97,8 @@ public class DashboardServiceImpl implements DashboardService {
                 .stream()
                 .filter(s -> !Boolean.TRUE.equals(s.getDeleted()))
                 .toList();
+
+
         BigDecimal totalRevenue = sales.stream()
                 .map(s -> s.getTotalPrice() != null ? s.getTotalPrice() : BigDecimal.ZERO)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -115,15 +117,18 @@ public class DashboardServiceImpl implements DashboardService {
                 .stream()
                 .filter(s -> !Boolean.TRUE.equals(s.getDeleted()))
                 .toList();
+
         BigDecimal totalExpenses = supplies.stream()
                 .map(s -> s.getUnitPrice() != null ? s.getUnitPrice() : BigDecimal.ZERO)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+
         BigDecimal totalExpensesThisMonth = supplies.stream()
                 .filter(s -> s.getSupplyDate().getMonthValue() == month &&
                         s.getSupplyDate().getYear() == year)
                 .map(s -> s.getUnitPrice() != null ? s.getUnitPrice() : BigDecimal.ZERO)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         summary.setTotalExpenses(totalExpenses);
+
         summary.setTotalExpensesThisMonth(totalExpensesThisMonth);
 
         // ==== ALERT ====

@@ -37,8 +37,12 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable()) // Disable CSRF useful for APIs
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        // Public auth endpoints (POST only)
-                        .requestMatchers("/api/auth/login", "/api/auth/signup").permitAll() // Public endpoints
+                        .requestMatchers(
+                                "/api/auth/login",
+                                "/api/auth/signup",
+                                "/api/auth/forgot-password",
+                                "/api/auth/reset-password"
+                        ).permitAll()
 
                         // DELETE — only ADMIN can delete anything
                         .requestMatchers(HttpMethod.DELETE, "/api/**").hasRole("ADMIN")

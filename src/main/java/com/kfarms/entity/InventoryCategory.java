@@ -5,5 +5,6 @@ public enum InventoryCategory {
     MEDICINE,
     TOOLS,
     EQUIPMENTS,
+    MANURE,
     OTHER
 }

@@ -59,8 +59,6 @@ public class FishPondServiceImpl implements FishPondService {
 
             List<Predicate> predicates = new ArrayList<>();
 
-            predicates.add(cb.isFalse(root.get("deleted")));
-
             // Filter: pondName (case-insensitive contains)
             if (pondName != null && !pondName.isBlank()) {
                 try {
@@ -189,7 +187,6 @@ public class FishPondServiceImpl implements FishPondService {
     // DELETE - delete existing entity by ID
     public void delete(Long id, String deletedBy){
         FishPond entity = repo.findById(id)
-                .filter(f -> !Boolean.TRUE.equals(f.getDeleted()))
                 .orElseThrow(() -> new ResourceNotFoundException("FishPond", "id", id));
 
         entity.setDeleted(true);
@@ -201,7 +198,6 @@ public class FishPondServiceImpl implements FishPondService {
     // RESTORE
     public void restore(Long id) {
         FishPond entity = repo.findById(id)
-                .filter(f -> !Boolean.TRUE.equals(f.getDeleted()))
                 .orElseThrow(() -> new ResourceNotFoundException("FishPond", "id", id));
 
         if (!Boolean.TRUE.equals(entity.getDeleted())) {

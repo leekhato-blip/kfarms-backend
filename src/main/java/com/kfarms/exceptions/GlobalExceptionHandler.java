@@ -3,6 +3,7 @@ package com.kfarms.exceptions;
 import com.kfarms.entity.ApiResponse;
 import jakarta.persistence.EntityNotFoundException;
 import jdk.dynalink.linker.MethodHandleTransformer;
+import lombok.extern.slf4j.Slf4j;
 import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
@@ -16,6 +17,7 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import java.nio.file.AccessDeniedException;
 import java.util.Arrays;
 
+@Slf4j
 @ControllerAdvice
 public class GlobalExceptionHandler  {
 
@@ -43,6 +45,7 @@ public class GlobalExceptionHandler  {
     // Handle database constraint violations (like unique itemName + category)
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ApiResponse<String>> handleDataIntegrityViolation(DataIntegrityViolationException ex) {
+        log.error("Data integrity violation: {}", ex.getMostSpecificCause().getMessage());
         String message = "This item already exists in the given category.";
         return ResponseEntity.status(HttpStatus.CONFLICT) // 409 conflict
                 .body(new ApiResponse<>(false, message, null));

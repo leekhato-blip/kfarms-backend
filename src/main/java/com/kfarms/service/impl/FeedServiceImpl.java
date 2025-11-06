@@ -74,9 +74,6 @@ public class FeedServiceImpl implements FeedService {
         Specification<Feed> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
 
-            //  exclude deleted
-            predicates.add(cb.isFalse(root.get("deleted")));
-
             if (batchTypeEnumFinal != null) {
                 predicates.add(cb.equal(root.get("batchType"), batchTypeEnumFinal));
             }

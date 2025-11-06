@@ -3,7 +3,6 @@ package com.kfarms.reports;
 import com.kfarms.entity.*;
 import com.kfarms.repository.*;
 import lombok.AllArgsConstructor;
-import org.springframework.cglib.core.Local;
 import org.springframework.stereotype.Component;
 
 import java.io.ByteArrayInputStream;
@@ -76,7 +75,7 @@ public class CsvExporter implements Exporter {
     @Override
     public InputStream exportLivestock(LocalDate start, LocalDate end) {
         List<Livestock> list = livestockRepo.findAllActive();
-        StringBuilder sb = new StringBuilder("Batch,Type,Current, Stock,Arrival Date,Source,Starting Age (Weeks),Mortality\n");
+        StringBuilder sb = new StringBuilder("Batch,Type,Current Stock,ArrivalDate,Source,Starting Age (Weeks),Mortality\n");
         for (Livestock l : list){
             sb.append(l.getBatchName()).append(",");
             sb.append(l.getType()).append(",");

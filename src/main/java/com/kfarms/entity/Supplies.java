@@ -8,10 +8,9 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 // PURCHASES
-
 @Data
 @Entity
-@Table(name = "Supplies")
+@Table(name = "supplies")
 @RequiredArgsConstructor
 public class Supplies extends Auditable{
     @Id

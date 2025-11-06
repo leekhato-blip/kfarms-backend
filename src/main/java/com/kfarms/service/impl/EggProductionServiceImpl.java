@@ -50,9 +50,6 @@ public class EggProductionServiceImpl implements EggProductionService {
         Specification<EggProduction> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
 
-            // exclude deleted
-            predicates.add(cb.isFalse(root.get("deleted")));
-
             if (livestockId != null) {
                 predicates.add(cb.equal(root.get("livestock").get("id"), livestockId));
             }
@@ -99,7 +96,7 @@ public class EggProductionServiceImpl implements EggProductionService {
         if (request.getGoodEggs() != null) entity.setGoodEggs(request.getGoodEggs());
         if (request.getDamagedEggs() != null) entity.setDamagedEggs(request.getDamagedEggs());
         if (request.getCollectionDate() != null) entity.setCollectionDate(request.getCollectionDate());
-        if (request.getNote() != null) entity.setNotes(request.getNote());
+        if (request.getNote() != null) entity.setNote(request.getNote());
 
         entity.setUpdatedBy(updatedBy);
         repo.save(entity);

@@ -93,7 +93,6 @@ public class FishHatchServiceImpl implements FishHatchService {
     @Override
     public void delete(Long id, String deletedBy){
         FishHatch entity = hatchRepo.findById(id)
-                .filter(f -> !Boolean.TRUE.equals(f.getDeleted()))
                 .orElseThrow(() -> new ResourceNotFoundException("FishHatch", "id", id));
 
         if (Boolean.TRUE.equals(entity.getDeleted())) {

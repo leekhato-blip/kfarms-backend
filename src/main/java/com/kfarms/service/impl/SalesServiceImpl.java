@@ -30,7 +30,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class SalesServiceImpl implements SalesService {
 
-    private final SalesRepository repo;
+    private final SalesRepository salesRepo;
     private final InventoryService inventoryService;
     private final NotificationService notification;
 
@@ -39,7 +39,7 @@ public class SalesServiceImpl implements SalesService {
     @Override
     public SalesResponseDto create(SalesRequestDto dto) {
         Sales entity = SalesMapper.toEntity(dto);
-        Sales saved = repo.save(entity);
+        Sales saved = salesRepo.save(entity);
         // Auto update inventory if NOT LIVESTOCK
         if (entity.getCategory() != SalesCategory.LIVESTOCK && entity.getCategory() != SalesCategory.FISH) {
             inventoryService.adjustStock(
@@ -60,8 +60,6 @@ public class SalesServiceImpl implements SalesService {
         Specification<Sales> spec = (root, query, cb) -> {
 
           List<Predicate> predicates = new ArrayList<>();
-          // exclude deleted
-            predicates.add(cb.isFalse(root.get("deleted")));
 
           if (itemName != null && !itemName.isBlank()) {
               predicates.add(cb.like(cb.lower(root.get("itemName")), "%" + itemName.toLowerCase() + "%"));
@@ -75,8 +73,10 @@ public class SalesServiceImpl implements SalesService {
           return cb.and(predicates.toArray(new Predicate[0]));
         };
 
-        Page<Sales> salesPage = repo.findAll(spec, pageable);
-        List<SalesResponseDto> items = salesPage.getContent().stream()
+        Page<Sales> salesPage = salesRepo.findAll(spec, pageable);
+        List<SalesResponseDto> items = salesPage
+                .getContent()
+                .stream()
                 .map(SalesMapper::toResponseDto)
                 .toList();
 
@@ -95,7 +95,7 @@ public class SalesServiceImpl implements SalesService {
     // READ - get sale item by ID
     @Override
     public SalesResponseDto getById(Long id) {
-        Sales entity = repo.findById(id)
+        Sales entity = salesRepo.findById(id)
                 .filter(s -> !Boolean.TRUE.equals(s.getDeleted()))
                 .orElseThrow(() -> new ResourceNotFoundException("Sales", "id", id));
 
@@ -105,7 +105,7 @@ public class SalesServiceImpl implements SalesService {
     // UPDATE - update existing sales item by ID
     @Override
     public SalesResponseDto update(Long id, SalesRequestDto request, String updatedBy) {
-        Sales entity = repo.findById(id)
+        Sales entity = salesRepo.findById(id)
                 .filter(s -> !Boolean.TRUE.equals(s.getDeleted()))
                 .orElseThrow(() -> new ResourceNotFoundException("Sales", "id", id));
 
@@ -116,15 +116,14 @@ public class SalesServiceImpl implements SalesService {
         entity.setBuyer(request.getBuyer());
         entity.setUpdatedBy(updatedBy);
 
-        repo.save(entity);
+        salesRepo.save(entity);
         return SalesMapper.toResponseDto(entity);
     }
 
     // DELETE - delete sales item by ID
     @Override
     public void delete(Long id, String deletedBy) {
-        Sales entity = repo.findById(id)
-                .filter(s -> !Boolean.TRUE.equals(s.getDeleted()))
+        Sales entity = salesRepo.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Sales", "id", id));
 
         if (Boolean.TRUE.equals(entity.getDeleted())) {
@@ -134,14 +133,13 @@ public class SalesServiceImpl implements SalesService {
         entity.setDeleted(true);
         entity.setDeletedAt(LocalDateTime.now());
         entity.setUpdatedBy(deletedBy);
-        repo.save(entity);
+        salesRepo.save(entity);
     }
 
     // RESTORE
     @Override
     public void restore(Long id) {
-        Sales entity = repo.findById(id)
-                .filter(s -> !Boolean.TRUE.equals(s.getDeleted()))
+        Sales entity = salesRepo.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Sales", "id", id));
 
         if (!Boolean.TRUE.equals(entity.getDeleted())) {
@@ -150,14 +148,14 @@ public class SalesServiceImpl implements SalesService {
 
         entity.setDeleted(false);
         entity.setDeletedAt(null);
-        repo.save(entity);
+        salesRepo.save(entity);
     }
 
     // SUMMARY - for analysis, dashboard and reports
     @Override
     public Map<String, Object> getSummary() {
 
-        List<Sales> all = repo.findAll()
+        List<Sales> all = salesRepo.findAll()
                 .stream()
                 .filter(s -> !Boolean.TRUE.equals(s.getDeleted()))
                 .toList();

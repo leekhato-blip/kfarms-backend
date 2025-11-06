@@ -47,9 +47,6 @@ public class InventoryServiceImpl implements InventoryService {
 
             List<Predicate> predicates = new ArrayList<>();
 
-            // always exclude deleted
-            predicates.add(cb.isFalse(root.get("deleted")));
-
 
             if (itemName != null && !itemName.isBlank()) {
                 predicates.add(cb.like(cb.lower(root.get("itemName")), "%" + itemName.toLowerCase() + "%"));

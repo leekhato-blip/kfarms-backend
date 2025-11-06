@@ -23,7 +23,6 @@ public class SuppliesRequestDto {
     @DecimalMin(value = "0.0", inclusive = false, message = "Unit price must be greater than 0")
     private BigDecimal unitPrice;
 
-    @NotBlank(message = "Supplier name is required")
     private String supplierName;
 
     @Size(max = 255, message = "Note cannot exceed 255 characters")

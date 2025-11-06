@@ -18,7 +18,6 @@ import org.springframework.web.bind.annotation.RestController;
 import java.time.LocalDate;
 import java.util.List;
 
-@Slf4j
 @RestController
 @RequestMapping("/api/reports")
 @RequiredArgsConstructor
@@ -59,7 +58,7 @@ public class ReportController {
     // --------------------------------------
     @GetMapping("/trends")
     public ResponseEntity<ApiResponse<List<TrendPointDto>>> getTrends(
-            @RequestParam String metric,
+            @RequestParam(required = false) String metric,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
             @RequestParam(defaultValue = "daily") String interval
@@ -77,8 +76,8 @@ public class ReportController {
     public ResponseEntity<InputStreamSource> exportData(
             @RequestParam String type,
             @RequestParam String category,
-            @RequestParam LocalDate start,
-            @RequestParam LocalDate end
+            @RequestParam(required = false) LocalDate start,
+            @RequestParam(required = false) LocalDate end
     ){
      ExportResponseMeta meta = reportService.validateExportParams(type, category, start, end);
      InputStreamSource resource = reportService.generateExport(type, category, start, end);

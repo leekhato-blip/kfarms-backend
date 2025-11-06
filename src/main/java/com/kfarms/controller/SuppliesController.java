@@ -108,8 +108,7 @@ public class SuppliesController {
     @GetMapping("/summary")
     @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER') or hasRole('STAFF')")
     public ResponseEntity<ApiResponse<Map<String, Object>>> summary(Authentication auth) {
-        AppUser user = (AppUser) auth.getPrincipal();
-        Map<String, Object> summary = service.getSummary(user);
+        Map<String, Object> summary = service.getSummary();
         return ResponseEntity.ok(
                 new ApiResponse<>(true, "Supply summary fetched", summary)
         );

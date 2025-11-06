@@ -1,5 +1,6 @@
 package com.kfarms.controller;
 
+import com.kfarms.dto.LoginRequest;
 import com.kfarms.dto.LoginResponse;
 import com.kfarms.entity.ApiResponse;
 import com.kfarms.entity.AppUser;
@@ -41,6 +42,13 @@ public class AuthController {
     // === REGISTER NEW USER === //
     @PostMapping("/signup")
     public ResponseEntity<ApiResponse<String>> signup(@RequestBody AppUser user){
+
+        // Check if email already exists
+        if(userRepo.findByEmail(user.getEmail()).isPresent()) {
+            return ResponseEntity.badRequest()
+                    .body(new ApiResponse<>(false, "Email already registered", null));
+        }
+
         // Check if username already exists
         if(userRepo.findByUsername(user.getUsername()).isPresent()){
             return ResponseEntity.badRequest()
@@ -49,7 +57,7 @@ public class AuthController {
 
         // Encode the password using BCrypt
         user.setPassword(passwordEncoder.encode(user.getPassword()));
-        user.setRole(Role.STAFF); // default role
+        user.setRole(Role.ADMIN); // default role
 
         // Save the new user in the database
         userRepo.save(user);
@@ -59,26 +67,27 @@ public class AuthController {
         );
     }
 
-    // == Login Existing User == //
+    // == Login Existing User (by email or username) == //
     @PostMapping("/login")
-    public ResponseEntity<ApiResponse<LoginResponse>> login(@RequestBody AppUser loginRequest){
+    public ResponseEntity<ApiResponse<LoginResponse>> login(@RequestBody LoginRequest loginRequest){
         try{
+            // Authenticate using email or username
             Authentication auth = authManager.authenticate(
                     new UsernamePasswordAuthenticationToken(
-                            loginRequest.getUsername(),
+                            loginRequest.getEmailOrUsername(),
                             loginRequest.getPassword()
                     )
             );
 
             SecurityContextHolder.getContext().setAuthentication(auth);
-            String username = auth.getName();
-            String jwt = jwtService.generateToken(username);
+            String principal = auth.getName(); // returns email from CustomUserDetailsService
+            String jwt = jwtService.generateToken(principal);
 
             return ResponseEntity.ok(
                     new ApiResponse<>(
                             true,
                             "Login Successful",
-                            new LoginResponse(jwt, username)
+                            new LoginResponse(jwt, principal)
                     )
             );
         }     catch (AuthenticationException e){

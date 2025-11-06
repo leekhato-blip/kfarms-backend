@@ -1,11 +1,8 @@
 package com.kfarms.reports;
 
 import com.kfarms.repository.*;
-import jdk.dynalink.linker.LinkerServices;
 import lombok.AllArgsConstructor;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.cglib.core.Local;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.InputStreamSource;
 import org.springframework.stereotype.Service;
@@ -14,7 +11,9 @@ import java.io.InputStream;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Slf4j
 @Service
@@ -39,7 +38,7 @@ public class ReportServiceImpl implements ReportService{
         // Use repository aggregate queries to avoid loading all rows
         long eggs = eggRepo.sumEggsBetween(start, end);
         BigDecimal revenue = salesRepo.sumTotalBetween(start, end);
-        BigDecimal expenses = computeExpensesBetween(start, end);
+        BigDecimal expenses = suppliesRepo.sumSupplyCostBetween(start, end);
         long livestock = livestockRepo.countAllActiveLivestock();
         long fishPond = fishRepo.countTotalFishStock();
         return new MonthlySummaryDto(eggs, revenue, expenses, livestock, fishPond);
@@ -69,28 +68,28 @@ public class ReportServiceImpl implements ReportService{
                     eggRepo.findDailyEggsBetween(startDate, endDate)
                             .stream()
                             .map(r -> new TrendPointDto((LocalDate) r[0],
-                                    new BigDecimal(String.valueOf(r[1]))))
+                                    r[1] == null ? BigDecimal.ZERO : new BigDecimal(String.valueOf(r[1]))))
                             .collect(Collectors.toList());
 
             case "sales" ->
                     salesRepo.findDailySalesBetween(startDate, endDate)
                             .stream()
                             .map(r -> new TrendPointDto((LocalDate) r[0],
-                                    new BigDecimal(String.valueOf(r[1]))))
+                                    r[1] == null ? BigDecimal.ZERO : new BigDecimal(String.valueOf(r[1]))))
                             .collect(Collectors.toList());
 
             case "feed", "feedusage", "feed_usage" ->
                     feedRepo.findDailyFeedUsageBetween(startDate, endDate)
                             .stream()
                             .map(r -> new TrendPointDto((LocalDate) r[0],
-                                    new BigDecimal(String.valueOf(r[1]))))
+                                    r[1] == null ? BigDecimal.ZERO : new BigDecimal(String.valueOf(r[1]))))
                             .collect(Collectors.toList());
 
             case "expenses" ->
-                    suppliesRepo.findDailyPurchasesBetween(startDate, endDate)
+                    suppliesRepo.findDailySuppliesBetween(startDate, endDate)
                             .stream()
                             .map(r -> new TrendPointDto((LocalDate) r[0],
-                                    new BigDecimal(String.valueOf(r[1]))))
+                                    r[1] == null ? BigDecimal.ZERO : new BigDecimal(String.valueOf(r[1]))))
                             .collect(Collectors.toList());
 
             default -> throw new IllegalArgumentException("Unsupported metric: " + metric);
@@ -137,9 +136,13 @@ public class ReportServiceImpl implements ReportService{
 
     // helper method
     private BigDecimal computeExpensesBetween(LocalDate start, LocalDate end) {
-        // Sum supplies, feed purchases, inventory purchases -> use repository aggregate queries
-        BigDecimal supply = salesRepo.sumExpensesBetween(start, end); // if present
-        return supply == null ? BigDecimal.ZERO : supply;
-    }
+        BigDecimal supplies = suppliesRepo.sumSupplyCostBetween(start, end);
 
+        log.info("SUPPLIES={}", supplies);
+
+
+        return Stream.of(supplies)
+                .filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
 }

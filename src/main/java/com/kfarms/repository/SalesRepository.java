@@ -14,7 +14,7 @@ import java.util.List;
 @Repository
 public interface SalesRepository extends JpaRepository<Sales, Long>, JpaSpecificationExecutor<Sales> {
 
-    @Query("SELECT DATE(s.salesDate), SUM(s.totalPrice) FROM Sales s WHERE s.salesDate BETWEEN :startDate AND :endDate GROUP BY DATE(s.salesDate)")
+    @Query("SELECT s.salesDate, SUM(s.totalPrice) FROM Sales s WHERE s.salesDate BETWEEN :start AND :end GROUP BY s.salesDate ORDER BY s.salesDate ASC")
     List<Object[]> findDailySalesBetween(@Param("start") LocalDate start, @Param("end") LocalDate end);
 
     @Query("SELECT s FROM Sales s WHERE s.salesDate BETWEEN :start AND :end ORDER BY s.salesDate ASC")
@@ -25,4 +25,6 @@ public interface SalesRepository extends JpaRepository<Sales, Long>, JpaSpecific
 
     @Query("SELECT COALESCE(SUM(s.unitPrice * s.quantity),0) FROM Sales s WHERE s.salesDate BETWEEN :start AND :end")
     BigDecimal sumExpensesBetween(@Param("start") LocalDate start, @Param("end") LocalDate end);
+
+
 }

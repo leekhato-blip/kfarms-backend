@@ -64,9 +64,6 @@ public class LivestockServiceImpl implements LivestockService {
 
         Specification<Livestock> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
-
-            // always exclude deleted
-            predicates.add(cb.isFalse(root.get("deleted")));
             
             if (batchName != null && !batchName.isBlank()) {
                 // use lower on expression and lowercase the param for case-insensitive search
@@ -83,7 +80,8 @@ public class LivestockServiceImpl implements LivestockService {
         };
         Page<Livestock> livestockPage = repo.findAll(spec, pageable);
 
-        List<LivestockResponseDto> items = livestockPage.getContent()
+        List<LivestockResponseDto> items = livestockPage
+                .getContent()
                 .stream()
                 .map(LivestockMapper::toResponseDto)
                 .toList();
@@ -103,7 +101,7 @@ public class LivestockServiceImpl implements LivestockService {
 
     // READ - get Livestock by ID
     @Override
-    public LivestockResponseDto getById(Long id){
+    public LivestockResponseDto getById(Long id) {
         Livestock entity = repo.findById(id)
                 .filter(l -> !Boolean.TRUE.equals(l.getDeleted()))
                 .orElseThrow(() -> new ResourceNotFoundException("Livestock", "id", id));

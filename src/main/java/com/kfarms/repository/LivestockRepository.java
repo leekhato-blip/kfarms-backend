@@ -1,5 +1,6 @@
 package com.kfarms.repository;
 
+import com.kfarms.entity.Feed;
 import com.kfarms.entity.Livestock;
 import com.kfarms.entity.LivestockType;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -13,19 +14,21 @@ import java.util.List;
 @Repository
 public interface LivestockRepository extends JpaRepository<Livestock, Long>, JpaSpecificationExecutor<Livestock> {
 
-    @Query("SELECT l FROM Livestock l WHERE l.active = true ORDER BY l.arrivalDate ASC")
+    @Query("SELECT l FROM Livestock l WHERE l.deleted = false ORDER BY l.arrivalDate ASC")
     List<Livestock> findAllActive();
 
-    @Query("SELECT l FROM Livestock l WHERE l.type = :type AND l.active = true ORDER BY l.arrivalDate ASC")
+    @Query("SELECT l FROM Livestock l WHERE l.type = :type AND l.deleted = false ORDER BY l.arrivalDate ASC")
     List<Livestock> findByType(@Param("type") LivestockType type);
 
-    @Query("SELECT COALESCE(SUM(l.quantity), 0) FROM Livestock l WHERE l.active = true")
+    @Query("SELECT COALESCE(SUM(l.currentStock), 0) FROM Livestock l WHERE l.deleted = false")
     long countAllActiveLivestock();
 
-    // ✅ Add this method for date range queries
     @Query("SELECT l FROM Livestock l WHERE l.arrivalDate BETWEEN :startDate AND :endDate")
     List<Livestock> findByArrivalDateBetween(
             @Param("startDate") LocalDate startDate,
             @Param("endDate") LocalDate endDate
     );
+
+    List<Livestock> findAllByArrivalDateBetween(LocalDate start, LocalDate end);
 }
+

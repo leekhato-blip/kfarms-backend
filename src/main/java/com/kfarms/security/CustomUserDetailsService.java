@@ -17,11 +17,12 @@ public class CustomUserDetailsService implements UserDetailsService {
     private final AppUserRepository userRepo;
 
     @Override
-    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-        AppUser user = userRepo.findByUsername(username)
+    public UserDetails loadUserByUsername(String input) throws UsernameNotFoundException {
+        AppUser user = userRepo.findByEmail(input)
+                .or(() -> userRepo.findByUsername(input))
                 .orElseThrow(() -> new UsernameNotFoundException("User not found"));
 
-        return User.withUsername(user.getUsername())
+        return User.withUsername(user.getEmail()) // email is main identity
                 .password(user.getPassword())
                 .roles(user.getRole().name()) // e.g. ADMIN
                 .build();

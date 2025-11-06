@@ -12,7 +12,8 @@ import java.time.LocalDate;
 @Entity
 @Table(name = "sales")
 @RequiredArgsConstructor
-public class Sales extends Auditable{
+public class Sales extends Auditable {
+
     @Id
     @GeneratedValue private Long id;
 
@@ -35,6 +36,5 @@ public class Sales extends Auditable{
     private String note; // nullable - returns null if not provided
     private String buyer; // nullable - returns "Walk-in customer" if not provided
 
-    @Column(nullable = false)
     private LocalDate salesDate = LocalDate.now(); // default today
 }

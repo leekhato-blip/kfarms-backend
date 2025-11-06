@@ -64,9 +64,6 @@ public class SuppliesServiceImpl implements SuppliesService {
 
             List<Predicate> predicates = new ArrayList<>();
 
-            // exclude deleted
-            predicates.add(cb.isFalse(root.get("deleted")));
-
           if (itemName != null && !itemName.isBlank()) {
               predicates.add(cb.like(cb.lower(root.get("itemName")), "%" + itemName.toLowerCase() + "%"));
           }
@@ -156,7 +153,7 @@ public class SuppliesServiceImpl implements SuppliesService {
 
     // SUMMARY
     @Override
-    public Map<String, Object> getSummary(AppUser user) {
+    public Map<String, Object> getSummary() {
         List<Supplies> all = repo.findAll()
                 .stream()
                 .filter(s -> !Boolean.TRUE.equals(s.getDeleted()))
@@ -224,7 +221,7 @@ public class SuppliesServiceImpl implements SuppliesService {
                     "FINANCE",
                     "High Supply Expenses",
                     "This month's total expenses on supplies have exceeded ₦500,000",
-                    user
+                    null
             );
         }
 

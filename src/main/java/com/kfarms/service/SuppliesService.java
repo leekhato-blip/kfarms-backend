@@ -14,5 +14,5 @@ public interface SuppliesService {
     SuppliesResponseDto update(Long id, SuppliesRequestDto request, String updatedBy);
     void delete(Long id, String deletedBy);
     void restore(Long id);
-    Map<String, Object> getSummary(AppUser user);
+    Map<String, Object> getSummary();
 }

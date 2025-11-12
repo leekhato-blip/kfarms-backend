@@ -2,8 +2,7 @@ package com.kfarms.security;
 
 import com.kfarms.entity.AppUser;
 import com.kfarms.repository.AppUserRepository;
-import jakarta.transaction.Transactional;
-import lombok.Data;
+import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
@@ -22,10 +21,25 @@ public class PasswordResetService {
     private final JavaMailSender mailSender;
 
     // Create and email reset token
+    @Transactional
     public void sendResetEmail(String email) {
         AppUser user = userRepo.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("Email not found"));
+                .orElseThrow(() -> new RuntimeException("User not found"));
 
+        // check for existing token
+        PasswordResetToken existingToken = tokenRepo.findByUserId(user.getId())
+                .filter(t -> t.getExpiryDate().isAfter(LocalDateTime.now()))
+                        .orElse(null);
+
+        if (existingToken != null) {
+            // Friendly message, don't resend email
+            throw new RuntimeException("A password reset has already been sent. please check your email. The link is valid for 30 minutes");
+        }
+
+        // Delete any existing token for this user
+        tokenRepo.deleteByUser(user.getId());
+
+        // Create a fresh token
         String token = UUID.randomUUID().toString();
         PasswordResetToken resetToken = new PasswordResetToken();
         resetToken.setToken(token);
@@ -33,19 +47,27 @@ public class PasswordResetService {
         resetToken.setExpiryDate(LocalDateTime.now().plusMinutes(30));
         tokenRepo.save(resetToken);
 
+        // Build the reset link
         String resetLink = "http://localhost:5137/reset-password?token=" + token;
 
-        SimpleMailMessage message = new SimpleMailMessage();
-        message.setTo(user.getEmail());
-        message.setSubject("KFarms Password Reset");
-        message.setText("Salam " + user.getUsername() + ",\n\n"
-                + "We received a password reset request for your KFarms account.\n"
-                + "Click the link below to reset your password (valid for 30 minutes):\n\n"
-                + resetLink + "\n\n"
-                + "If you didn’t request this, please ignore this email.\n\n"
-                + "KFarms Support");
-
-        mailSender.send(message);
+        // Send email asynchronously
+        new Thread(() -> {
+            try {
+                SimpleMailMessage message = new SimpleMailMessage();
+                message.setTo(user.getEmail());
+                message.setSubject("KFarms Password Reset");
+                message.setText("Hello " + user.getUsername() + ",\n\n"
+                        + "We received a password reset request for your KFarms account.\n"
+                        + "Click the link below to reset your password (valid for 30 minutes):\n\n"
+                        + resetLink + "\n\n"
+                        + "If you didn’t request this, please ignore this email.\n\n"
+                        + "KFarms Support");
+                mailSender.send(message);
+                System.out.println("Password reset email sent to " + user.getEmail());
+            } catch (Exception e){
+                System.err.println("Failed to send email to " + user.getEmail());
+            }
+        }).start();
     }
 
     // Reset password using token

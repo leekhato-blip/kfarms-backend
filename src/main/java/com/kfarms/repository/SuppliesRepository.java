@@ -25,4 +25,7 @@ public interface SuppliesRepository extends JpaRepository<Supplies, Long>, JpaSp
     @Query("SELECT COALESCE(SUM(s.totalPrice), 0) FROM Supplies s WHERE s.supplyDate BETWEEN :start AND :end")
     BigDecimal sumSupplyCostBetween(@Param("start") LocalDate start, @Param("end") LocalDate end);
 
+    @Query("SELECT TO_CHAR(sp.supplyDate, 'YYYY-MM') AS month, SUM(sp.totalPrice) " +
+            "FROM Supplies sp WHERE sp.deleted = false GROUP BY month ORDER BY month")
+    List<Object[]> getMonthlyExpenses();
 }

@@ -215,9 +215,9 @@ public class InventoryServiceImpl implements InventoryService {
         inventory.setLastUpdated(LocalDate.now());
 
         // Prevent negative stock
-        if (inventory.getQuantity() < 0) {
-            throw new IllegalArgumentException("Insufficient stock for " + itemName);
-        }
+//        if (inventory.getQuantity() < 0) {
+//            throw new IllegalArgumentException("Insufficient stock for " + itemName);
+//        }
 
         repo.save(inventory);
     }

@@ -26,5 +26,11 @@ public interface SalesRepository extends JpaRepository<Sales, Long>, JpaSpecific
     @Query("SELECT COALESCE(SUM(s.unitPrice * s.quantity),0) FROM Sales s WHERE s.salesDate BETWEEN :start AND :end")
     BigDecimal sumExpensesBetween(@Param("start") LocalDate start, @Param("end") LocalDate end);
 
+    @Query("SELECT TO_CHAR(s.salesDate, 'YYYY-MM') AS month, SUM(s.totalPrice) " +
+            "FROM Sales s WHERE s.deleted = false GROUP BY month ORDER BY month")
+    List<Object[]> getMonthlyRevenue();
+
+
+
 
 }

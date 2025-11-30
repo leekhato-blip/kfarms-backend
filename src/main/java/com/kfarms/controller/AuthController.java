@@ -2,6 +2,7 @@ package com.kfarms.controller;
 
 import com.kfarms.dto.LoginRequest;
 import com.kfarms.dto.LoginResponse;
+import com.kfarms.dto.UserDto;
 import com.kfarms.entity.ApiResponse;
 import com.kfarms.entity.AppUser;
 import com.kfarms.entity.Role;
@@ -14,6 +15,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -78,16 +80,33 @@ public class AuthController {
                             loginRequest.getPassword()
                     )
             );
-
+ 
             SecurityContextHolder.getContext().setAuthentication(auth);
             String principal = auth.getName(); // returns email from CustomUserDetailsService
+
+            // =========================================
+            // FETCH THE USER FROM THE DATABASE
+            // =========================================
+            AppUser user = userRepo.findByEmail(principal)
+                    .orElseThrow(() -> new RuntimeException("User not found"));
+
+            String formattedUsername = StringUtils.capitalize(user.getUsername().toLowerCase());
+            UserDto userDto = new UserDto(
+                    user.getId(),
+                    formattedUsername,
+                    user.getEmail(),
+                    user.getRole().name()
+            );
+            // Generate token
             String jwt = jwtService.generateToken(principal);
+
+            LoginResponse loginResponse = new LoginResponse(jwt, userDto);
 
             return ResponseEntity.ok(
                     new ApiResponse<>(
                             true,
                             "Login Successful",
-                            new LoginResponse(jwt, principal)
+                            loginResponse
                     )
             );
         }     catch (AuthenticationException e){

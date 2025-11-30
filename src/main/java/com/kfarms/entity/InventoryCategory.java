@@ -3,8 +3,11 @@ package com.kfarms.entity;
 public enum InventoryCategory {
     FEED,
     MEDICINE,
+    FISH,
+    LAYER,
+    NOILER,
     TOOLS,
-    EQUIPMENTS,
+    EQUIPMENT,
     MANURE,
     OTHER
 }

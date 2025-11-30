@@ -2,12 +2,15 @@ package com.kfarms.security;
 
 import com.kfarms.entity.AppUser;
 import com.kfarms.repository.AppUserRepository;
-import org.springframework.transaction.annotation.Transactional;
+import jakarta.mail.MessagingException;
+import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
-import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.MimeMessageHelper;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -15,31 +18,32 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class PasswordResetService {
+
     private final AppUserRepository userRepo;
     private final PasswordResetTokenRepo tokenRepo;
     private final PasswordEncoder passwordEncoder;
     private final JavaMailSender mailSender;
 
-    // Create and email reset token
     @Transactional
     public void sendResetEmail(String email) {
         AppUser user = userRepo.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        // check for existing token
+        // Check for existing token
         PasswordResetToken existingToken = tokenRepo.findByUserId(user.getId())
                 .filter(t -> t.getExpiryDate().isAfter(LocalDateTime.now()))
-                        .orElse(null);
+                .orElse(null);
 
         if (existingToken != null) {
-            // Friendly message, don't resend email
-            throw new RuntimeException("A password reset has already been sent. please check your email. The link is valid for 30 minutes");
+            throw new RuntimeException(
+                    "A password reset has already been sent. Please check your email. The link is valid for 30 minutes"
+            );
         }
 
-        // Delete any existing token for this user
+        // Delete old tokens
         tokenRepo.deleteByUser(user.getId());
 
-        // Create a fresh token
+        // Create new token
         String token = UUID.randomUUID().toString();
         PasswordResetToken resetToken = new PasswordResetToken();
         resetToken.setToken(token);
@@ -47,30 +51,41 @@ public class PasswordResetService {
         resetToken.setExpiryDate(LocalDateTime.now().plusMinutes(30));
         tokenRepo.save(resetToken);
 
-        // Build the reset link
-        String resetLink = "http://localhost:5137/reset-password?token=" + token;
+        String resetLink = "http://localhost:5173/auth/reset-password?token=" + token;
 
-        // Send email asynchronously
-        new Thread(() -> {
-            try {
-                SimpleMailMessage message = new SimpleMailMessage();
-                message.setTo(user.getEmail());
-                message.setSubject("KFarms Password Reset");
-                message.setText("Hello " + user.getUsername() + ",\n\n"
-                        + "We received a password reset request for your KFarms account.\n"
-                        + "Click the link below to reset your password (valid for 30 minutes):\n\n"
-                        + resetLink + "\n\n"
-                        + "If you didn’t request this, please ignore this email.\n\n"
-                        + "KFarms Support");
-                mailSender.send(message);
-                System.out.println("Password reset email sent to " + user.getEmail());
-            } catch (Exception e){
-                System.err.println("Failed to send email to " + user.getEmail());
-            }
-        }).start();
+        // Send email async
+        sendEmailAsync(user.getEmail(), user.getUsername(), resetLink);
     }
 
-    // Reset password using token
+    @Async
+    public void sendEmailAsync(String to, String username, String resetLink) {
+        try {
+            MimeMessage mimeMessage = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, "utf-8");
+
+            String html = "<div style='font-family: sans-serif; color:#333;'>"
+                    + "<h2>KFarms Password Reset</h2>"
+                    + "<p>Hello " + username + ",</p>"
+                    + "<p>We received a password reset request for your KFarms account.</p>"
+                    + "<p><a href='" + resetLink + "' "
+                    + "style='background:#2563EB;color:white;padding:10px 20px;border-radius:6px;"
+                    + "text-decoration:none;font-weight:bold;'>Reset Password</a></p>"
+                    + "<p>This link will expire in 30 minutes. If you didn’t request this, ignore this email.</p>"
+                    + "<br><p>– KFarms Support</p></div>";
+
+//            helper.setFrom("MS_xxxx@your-subdomain.mlsender.net");
+            helper.setTo(to);
+            helper.setSubject("KFarms Password Reset");
+            helper.setText(html, true);
+
+            mailSender.send(mimeMessage);
+            System.out.println("Password reset email sent to " + to);
+        } catch (MessagingException e) {
+            System.err.println("Failed to send email to " + to);
+            e.printStackTrace();
+        }
+    }
+
     @Transactional
     public void resetPassword(String token, String newPassword) {
         PasswordResetToken resetToken = tokenRepo.findByToken(token)
@@ -83,7 +98,6 @@ public class PasswordResetService {
         AppUser user = resetToken.getUser();
         user.setPassword(passwordEncoder.encode(newPassword));
         userRepo.save(user);
-        tokenRepo.delete(resetToken); // Invalidate token after use
+        tokenRepo.delete(resetToken);
     }
-
 }

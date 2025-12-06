@@ -23,7 +23,7 @@ public class EggProductionMapper {
     public static EggProductionResponseDto toResponseDto(EggProduction entity){
         EggProductionResponseDto response = new EggProductionResponseDto();
         response.setId(entity.getId());
-        response.setLivestockId(entity.getLivestock().getId());
+        response.setBatchId(entity.getLivestock().getId());
         response.setBatchName(entity.getLivestock().getBatchName());
         response.setCollectionDate(entity.getCollectionDate());
         response.setGoodEggs(entity.getGoodEggs());

@@ -31,9 +31,9 @@ public class EggProductionServiceImpl implements EggProductionService {
     // CREATE
     @Override
     public EggProductionResponseDto create(EggProductionRequestDto request) {
-        Livestock livestock = livestockRepo.findById(request.getLivestockId())
+        Livestock livestock = livestockRepo.findById(request.getBatchId())
                 .filter(l -> !Boolean.TRUE.equals(l.getDeleted()))
-                .orElseThrow(() -> new ResourceNotFoundException("Livestock", "id", request.getLivestockId()));
+                .orElseThrow(() -> new ResourceNotFoundException("Livestock", "id", request.getBatchId()));
 
         EggProduction entity = EggProductionMapper.toEntity(request, livestock);
         entity.setLivestock(livestock);
@@ -44,14 +44,14 @@ public class EggProductionServiceImpl implements EggProductionService {
 
     // READ - all eggs (pagination + filter)
     @Override
-    public Map<String, Object> getAll(int page, int size, Long livestockId, LocalDate collectionDate) {
+    public Map<String, Object> getAll(int page, int size, Long batchId, LocalDate collectionDate) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("collectionDate").descending());
 
         Specification<EggProduction> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
 
-            if (livestockId != null) {
-                predicates.add(cb.equal(root.get("livestock").get("id"), livestockId));
+            if (batchId != null) {
+                predicates.add(cb.equal(root.get("livestock").get("id"), batchId));
             }
             if (collectionDate != null) {
                 predicates.add(cb.equal(root.get("collectionDate"), collectionDate));
@@ -93,8 +93,8 @@ public class EggProductionServiceImpl implements EggProductionService {
                 .filter(e -> !Boolean.TRUE.equals(e.getDeleted()))
                 .orElseThrow(() -> new ResourceNotFoundException("Egg", "id", id));
 
-        if (request.getGoodEggs() != null) entity.setGoodEggs(request.getGoodEggs());
-        if (request.getDamagedEggs() != null) entity.setDamagedEggs(request.getDamagedEggs());
+        if (request.getGoodEggs() != 0) entity.setGoodEggs(request.getGoodEggs());
+        if (request.getDamagedEggs() != 0) entity.setDamagedEggs(request.getDamagedEggs());
         if (request.getCollectionDate() != null) entity.setCollectionDate(request.getCollectionDate());
         if (request.getNote() != null) entity.setNote(request.getNote());
 
@@ -144,28 +144,36 @@ public class EggProductionServiceImpl implements EggProductionService {
         int currentMonth = now.getMonthValue();
         int currentYear = now.getYear();
 
-        int totalGood = all.stream().mapToInt(e -> e.getGoodEggs() != null ? e.getGoodEggs() : 0).sum();
-        int totalDamaged = all.stream().mapToInt(e -> e.getDamagedEggs() != null ? e.getDamagedEggs() : 0).sum();
-        double totalCrates = all.stream().mapToDouble(EggProduction::getCratesProduced).sum();
+        int totalGood = all.stream().mapToInt(e -> e.getGoodEggs() != 0 ? e.getGoodEggs() : 0).sum();
+        int totalDamaged = all.stream().mapToInt(e -> e.getDamagedEggs() != 0 ? e.getDamagedEggs() : 0).sum();
+        int totalCrates = totalGood / 30;
+
 
         // Group by livestock batch
         Map<String, Integer> countByBatch = all.stream()
                 .filter(e -> e.getLivestock() != null)
                 .collect(Collectors.groupingBy(
                         e -> e.getLivestock().getBatchName(),
-                        Collectors.summingInt(e -> e.getGoodEggs() != null ? e.getGoodEggs() : 0)
+                        Collectors.summingInt(e -> e.getGoodEggs() != 0 ? e.getGoodEggs() : 0)
                 ));
 
         // Monthly Summary
+        Map<String, Integer> monthlyProduction = all.stream()
+                .collect(Collectors.groupingBy(
+                        e -> e.getCollectionDate().getYear() + "-" + String.format("%02d", e.getCollectionDate().getMonthValue()),
+                        Collectors.summingInt(EggProduction::getGoodEggs) // sum of good eggs
+                ));
+
+
         List<EggProduction> monthly = all.stream()
                 .filter(e -> e.getCollectionDate() != null
                         && e.getCollectionDate().getMonthValue() == currentMonth
                         && e.getCollectionDate().getYear() == currentYear)
                 .toList();
 
-        int monthlyGood = monthly.stream().mapToInt(e -> e.getGoodEggs() != null ? e.getGoodEggs() : 0).sum();
-        int monthlyDamaged = monthly.stream().mapToInt(e -> e.getDamagedEggs() != null ? e.getDamagedEggs() : 0).sum();
-        double monthlyCrates = monthly.stream().mapToDouble(EggProduction::getCratesProduced).sum();
+        int monthlyGood = monthly.stream().mapToInt(e -> e.getGoodEggs() != 0 ? e.getGoodEggs() : 0).sum();
+        int monthlyDamaged = monthly.stream().mapToInt(e -> e.getDamagedEggs() != 0 ? e.getDamagedEggs() : 0).sum();
+        int monthlyCrates = monthlyGood / 30;
 
         Map<String, Object> summary = new HashMap<>();
         summary.put("totalGoodEggs", totalGood);
@@ -175,6 +183,7 @@ public class EggProductionServiceImpl implements EggProductionService {
         summary.put("monthlyCracked", monthlyDamaged);
         summary.put("monthlyCratesProduced", monthlyCrates);
         summary.put("countByBatch", countByBatch);
+        summary.put("MonthlyProduction", monthlyProduction);
 
         // ==== NOTIFICATION ====
         if (monthlyCrates < 5) {

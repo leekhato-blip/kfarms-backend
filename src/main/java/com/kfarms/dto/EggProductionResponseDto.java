@@ -8,12 +8,12 @@ import java.time.LocalDateTime;
 @Data
 public class EggProductionResponseDto {
     private Long id;
-    private Long livestockId;
+    private Long batchId;
     private String batchName;
     private LocalDate collectionDate;
-    private Integer goodEggs;
-    private Integer damagedEggs;
-    private double cratesProduced;
+    private int goodEggs;
+    private int damagedEggs;
+    private int cratesProduced;
     private String note;
 
     private String createdBy;

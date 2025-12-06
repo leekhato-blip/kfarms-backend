@@ -54,6 +54,9 @@ public class DashboardServiceImpl implements DashboardService {
                 .filter(l -> !Boolean.TRUE.equals(l.getDeleted()))
                 .toList();
 
+        int totalPondCount = ponds.size();
+        summary.setTotalPondCount(totalPondCount);
+
         int totalFishStock = ponds.stream()
                 .mapToInt(p -> p.getCurrentStock() != null ? p.getCurrentStock() : 0)
                 .sum();
@@ -66,11 +69,11 @@ public class DashboardServiceImpl implements DashboardService {
                 .toList();
         summary.setTotalFeeds(feeds.size());
 
-        double totalFeedQuantity = inventoryRepo.findAll().stream()
+        int totalFeedQuantity = inventoryRepo.findAll().stream()
                 .filter(i -> !Boolean.TRUE.equals(i.getDeleted()) &&
                         i.getCategory() != null &&
                         i.getCategory() == InventoryCategory.FEED)
-                .mapToDouble(i -> i.getQuantity() != null ? i.getQuantity() : 0)
+                .mapToInt(i -> i.getQuantity() != null ? i.getQuantity() : 0)
                 .sum();
         summary.setTotalFeedQuantity(totalFeedQuantity);
 
@@ -80,14 +83,16 @@ public class DashboardServiceImpl implements DashboardService {
                 .filter(e -> !Boolean.TRUE.equals(e.getDeleted()))
                 .toList();
 
-        double totalCratesProduced = eggs.stream()
-                .mapToDouble(EggProduction::getCratesProduced)
+        int totalGoodEggs = eggs.stream()
+                .mapToInt(EggProduction::getGoodEggs)
                 .sum();
 
-        double totalCratesProducedThisMonth = eggs.stream()
+        int totalCratesProduced = totalGoodEggs / 30;
+
+        int totalCratesProducedThisMonth = eggs.stream()
                 .filter(e -> e.getCollectionDate().getMonthValue() == month &&
                         e.getCollectionDate().getYear() == year)
-                .mapToDouble(e -> e.getCratesProduced() != 0.0 ? e.getCratesProduced() : 0.0)
+                .mapToInt(e -> e.getCratesProduced() != 0 ? e.getCratesProduced() : 0)
                 .sum();
         summary.setTotalCratesProduced(totalCratesProduced);
         summary.setTotalCratesProducedThisMonth(totalCratesProducedThisMonth);
@@ -127,9 +132,19 @@ public class DashboardServiceImpl implements DashboardService {
                         s.getSupplyDate().getYear() == year)
                 .map(s -> s.getUnitPrice() != null ? s.getUnitPrice() : BigDecimal.ZERO)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        summary.setTotalExpenses(totalExpenses);
 
+        summary.setTotalExpenses(totalExpenses);
         summary.setTotalExpensesThisMonth(totalExpensesThisMonth);
+
+
+        int totalEggsProducedThisMonth = (int) eggs.stream()
+                .filter(e -> e.getCollectionDate().getMonthValue() == month &&
+                        e.getCollectionDate().getYear() == year)
+                .mapToInt(e -> e.getCratesProduced() * 30) // convert crates to eggs
+                .sum();
+
+        summary.setTotalEggsProducedThisMonth(totalEggsProducedThisMonth);
+
 
         // ==== ALERT ====
         Map<String, Object> alerts = new HashMap<>();

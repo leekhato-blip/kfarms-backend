@@ -10,9 +10,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import java.time.LocalDate;
 
 @Entity
-@Table(name = "egg_production", uniqueConstraints = {
-        @UniqueConstraint(columnNames = {"batch_id"})
-})
+@Table(name = "egg_production")
 @Data
 @RequiredArgsConstructor
 @EntityListeners(AuditingEntityListener.class)
@@ -31,21 +29,21 @@ public class EggProduction extends Auditable {
     private LocalDate collectionDate = LocalDate.now();
 
     @Column(nullable = false)
-    private Integer goodEggs = 0; // usable eggs
+    private int goodEggs = 0; // usable eggs
 
     @Column(nullable = false)
-    private Integer damagedEggs = 0; // cracked or unusable eggs
+    private int damagedEggs = 0; // cracked or unusable eggs
 
     @Column(nullable = false)
-    private double cratesProduced = 0.0; // optional derived field (e.g., goodEggs / 30.0)
+    private int cratesProduced = 0; // optional derived field (e.g., goodEggs / 30)
 
     private String note;
 
     public void calculateCrates() {
-        if (goodEggs != null && goodEggs > 0) {
-            this.cratesProduced = Math.round((goodEggs / 30.0) * 100.0) / 100.0; // rounded to 2 dp
+        if (goodEggs > 0) {
+            this.cratesProduced = goodEggs / 30; // integer division (floor)
         } else {
-            this.cratesProduced = 0.0;
+            this.cratesProduced = 0;
         }
     }
 }

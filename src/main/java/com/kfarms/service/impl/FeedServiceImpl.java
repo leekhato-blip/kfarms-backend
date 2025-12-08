@@ -189,7 +189,39 @@ public class FeedServiceImpl implements FeedService {
                         f -> f.getBatchType().name(),
                         Collectors.summingInt(f -> f.getQuantityUsed() != null ? f.getQuantityUsed() : 0)
                 ));
-        summary.put("quantityByType", quantityByType);
+        int grandTotal = quantityByType.values()
+                        .stream()
+                                .mapToInt(Integer::intValue)
+                                        .sum();
+
+        List<Map<String, Object>> breakdown = new ArrayList<>();
+
+        if(grandTotal > 0) {
+            quantityByType.forEach((type, qty) -> {
+                double percentage = (qty * 100.0) / grandTotal;
+
+                String label;
+                switch (type) {
+                    case "LAYERS":
+                        label = "Poultry";
+                        break;
+                    case "FISH":
+                        label = "Fish";
+                        break;
+                    case "DUCKS":
+                        label = "Ducks";
+                        break;
+                    default:
+                        label = "others";
+                }
+
+                Map<String, Object> entry = new HashMap<>();
+                entry.put("label", label);
+                entry.put("value", Math.round(percentage)); // round to whole %
+                breakdown.add(entry);
+            });
+        }
+        summary.put("feedBreakdown", breakdown);
 
         // sum quantity used per month
         int usedThisMonth = all.stream()

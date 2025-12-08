@@ -4,6 +4,7 @@ import com.kfarms.dto.DashboardSummaryDto;
 import com.kfarms.entity.*;
 import com.kfarms.repository.*;
 import com.kfarms.service.DashboardService;
+import com.kfarms.service.EggProductionService;
 import com.kfarms.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -25,9 +26,8 @@ public class DashboardServiceImpl implements DashboardService {
     private final SuppliesRepository suppliesRepo;
     private final FishPondRepository fishPondRepo;
     private final InventoryRepository inventoryRepo;
-
-    // Notification service
     private final NotificationService notificationService;
+    private final EggProductionService eggProductionService;
 
     @Override
     public DashboardSummaryDto getSummary() {
@@ -77,18 +77,60 @@ public class DashboardServiceImpl implements DashboardService {
                 .sum();
         summary.setTotalFeedQuantity(totalFeedQuantity);
 
-        // ==== EGG PRODUCTION ====
+        // ==== FEED BREAKDOWN (for dashboard pie chart) ====
+        Map<String, Integer> quantityByBatch = new HashMap<>();
+
+        feeds.forEach(feed -> {
+            String type = feed.getBatchType() != null ? feed.getBatchType().name() : "UNKNOWN";
+            int qty = feed.getQuantityUsed() != null ? feed.getQuantityUsed() : 0;
+
+            quantityByBatch.put(type, quantityByBatch.getOrDefault(type, 0) + qty);
+        });
+
+        int grandTotalFeedUsed = quantityByBatch.values().stream().mapToInt(Integer::intValue).sum();
+
+        List<Map<String, Object>> feedBreakdown = quantityByBatch.entrySet().stream()
+                .map(entry -> {
+                    Map<String, Object> m = new HashMap<>();
+                    m.put("label", entry.getKey()); // LAYER, FISH
+                    m.put("value", entry.getValue()); // total quantity used
+                    double percent = grandTotalFeedUsed == 0 ? 0 :
+                            (entry.getValue() * 100.0 / grandTotalFeedUsed);
+                    m.put("percent", Math.round(percent * 10.0) / 10.0);
+                    return m;
+                }).toList();
+        summary.setFeedBreakdown(feedBreakdown);
+
+
+        // ==== EGG COLLECT ====
         List<EggProduction> eggs = eggRepo.findAll()
                 .stream()
                 .filter(e -> !Boolean.TRUE.equals(e.getDeleted()))
                 .toList();
 
+        // Get monthly egg production from EggProduction
+        Map<String, Object> eggSummary = eggProductionService.getSummary();
+
+        // Monthly production data
+        Map<String, Integer> monthlyProduction = (Map<String, Integer>) eggSummary.get("MonthlyProduction");
+        summary.setMonthlyProduction(monthlyProduction);
+
+        // Total eggs
         int totalGoodEggs = eggs.stream()
                 .mapToInt(EggProduction::getGoodEggs)
                 .sum();
 
+        // Total crates produced
         int totalCratesProduced = totalGoodEggs / 30;
 
+        // Daily crates production
+        int totalCratesProducedToday = eggs.stream()
+                .filter(e -> e.getCollectionDate().isEqual(now))
+                .mapToInt(e -> e.getCratesProduced() != 0 ? e.getCratesProduced() : 0)
+                .sum();
+        summary.setTotalCratesProducedToday(totalCratesProducedToday);
+
+        // Total monthly crates
         int totalCratesProducedThisMonth = eggs.stream()
                 .filter(e -> e.getCollectionDate().getMonthValue() == month &&
                         e.getCollectionDate().getYear() == year)
@@ -102,6 +144,8 @@ public class DashboardServiceImpl implements DashboardService {
                 .stream()
                 .filter(s -> !Boolean.TRUE.equals(s.getDeleted()))
                 .toList();
+
+
 
 
         BigDecimal totalRevenue = sales.stream()

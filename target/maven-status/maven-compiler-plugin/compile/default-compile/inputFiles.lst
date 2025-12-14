@@ -1,4 +1,5 @@
 /home/lee/Documents/kfarms-backend/src/main/java/com/kfarms/KfarmsBackendApplication.java
+/home/lee/Documents/kfarms-backend/src/main/java/com/kfarms/catalog/InventoryCatalog.java
 /home/lee/Documents/kfarms-backend/src/main/java/com/kfarms/config/AuditConfig.java
 /home/lee/Documents/kfarms-backend/src/main/java/com/kfarms/config/AuditorAwareImpl.java
 /home/lee/Documents/kfarms-backend/src/main/java/com/kfarms/config/JacksonConfig.java

@@ -47,7 +47,6 @@ public class InventoryServiceImpl implements InventoryService {
 
             List<Predicate> predicates = new ArrayList<>();
 
-
             if (itemName != null && !itemName.isBlank()) {
                 predicates.add(cb.like(cb.lower(root.get("itemName")), "%" + itemName.toLowerCase() + "%"));
             }
@@ -106,7 +105,6 @@ public class InventoryServiceImpl implements InventoryService {
 
         repo.save(entity);
         return InventoryMapper.toResponseDto(entity);
-
     }
 
     // DELETE - delete existing inventory item by ID
@@ -195,29 +193,76 @@ public class InventoryServiceImpl implements InventoryService {
         return summary;
     }
 
+    @Override
+    public List<Map<String, Object>> getLowFeedItems() {
+        List<Inventory> lowFeeds = repo.findAll().stream()
+                .filter(i -> !Boolean.TRUE.equals(i.getDeleted()))
+                .filter(i -> i.getCategory() == InventoryCategory.FEED)
+                .filter(i -> i.getQuantity() <= i.getMinThreshold())
+                .toList();
+
+        List<Map<String, Object>> watchlist = new ArrayList<>();
+        for (Inventory feed : lowFeeds) {
+            Map<String, Object> map = new HashMap<>();
+            map.put("id", feed.getId());
+            map.put("name", feed.getItemName());
+            map.put("remaining", feed.getQuantity());
+            map.put("unit", feed.getUnit());
+            watchlist.add(map);
+        }
+
+        return watchlist;
+    }
+
+
     // Auto update inventory
     @Override
-    public void adjustStock(String itemName, InventoryCategory category, int quantityChange, String unit, String note){
-        Inventory inventory = repo.findByItemNameAndCategory(itemName, category)
+    public void adjustStock(String itemName, InventoryCategory category, int quantityChange, String unit, String note) {
+
+        if (itemName == null || itemName.isBlank()) {
+            throw new IllegalArgumentException("itemName is required");
+        }
+
+        // 1) normalize + map to canonical name (avoid duplicates)
+        Optional<String> canonicalOpt = com.kfarms.catalog.InventoryCatalog.getCanonicalName(category, itemName);
+        String canonicalName;
+        if (category == InventoryCategory.FEED || category == InventoryCategory.FISH || category == InventoryCategory.LAYER || category == InventoryCategory.NOILER) {
+            // For feed-related categories we are strict: require known catalog entry
+            canonicalName = canonicalOpt.orElseThrow(() ->
+                    new IllegalArgumentException("Unknown feed item: '" + itemName + "'. Use one of the allowed catalog names."));
+        } else {
+            // Non-feed categories: use provided name but normalise whitespace
+            canonicalName = canonicalOpt.orElse(itemName.trim());
+        }
+
+        // 2) find by canonical name + category (repo query trims and lowercases)
+        Inventory inventory = repo.findByItemNameAndCategory(canonicalName, category)
                 .filter(i -> !Boolean.TRUE.equals(i.getDeleted()))
                 .orElseGet(() -> {
-                   Inventory newInventory = new Inventory();
-                   newInventory.setItemName(itemName.trim());
-                   newInventory.setCategory(category);
-                   newInventory.setQuantity(0);
-                   newInventory.setUnit(unit);
-                   newInventory.setNote(note);
-                   return newInventory;
+                    Inventory newInventory = new Inventory();
+                    newInventory.setItemName(canonicalName);
+                    newInventory.setCategory(category);
+                    newInventory.setQuantity(0);
+                    newInventory.setUnit(unit != null ? unit : "units");
+                    // set default min threshold from catalog when available
+                    int defaultThreshold = com.kfarms.catalog.InventoryCatalog.getDefaultThreshold(canonicalName);
+                    newInventory.setMinThreshold(defaultThreshold);
+                    newInventory.setNote(note);
+                    newInventory.setCreatedAt(LocalDateTime.now());
+                    return newInventory;
                 });
 
-        // Apply stock adjustment
-        inventory.setQuantity(inventory.getQuantity() + quantityChange);
-        inventory.setLastUpdated(LocalDate.now());
+        int currentQty = inventory.getQuantity() != null ? inventory.getQuantity() : 0;
+        int newQuantity = currentQty + quantityChange;
 
-        // Prevent negative stock
-//        if (inventory.getQuantity() < 0) {
-//            throw new IllegalArgumentException("Insufficient stock for " + itemName);
-//        }
+        if (newQuantity < 0) {
+            throw new IllegalArgumentException("Insufficient stock for " + canonicalName);
+        }
+
+        inventory.setQuantity(newQuantity);
+        inventory.setLastUpdated(LocalDate.now());
+        inventory.setUpdatedAt(LocalDateTime.now());
+        if (note != null && !note.isBlank()) inventory.setNote(note);
 
         repo.save(inventory);
     }

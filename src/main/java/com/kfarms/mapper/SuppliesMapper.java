@@ -20,6 +20,7 @@ public class SuppliesMapper {
         dto.setUnitPrice(entity.getUnitPrice());
         dto.setTotalPrice(entity.getTotalPrice());
         dto.setDate(entity.getSupplyDate());
+        dto.setNote(entity.getNote());
         
 
         // audits
@@ -50,6 +51,7 @@ public class SuppliesMapper {
         } else {
             entity.setTotalPrice(BigDecimal.ZERO);
         }
+        entity.setNote(dto.getNote());
 
         entity.setSupplierName(dto.getSupplierName());
         entity.setSupplyDate(dto.getSupplyDate() != null ? dto.getSupplyDate() : LocalDate.now());

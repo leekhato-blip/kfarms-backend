@@ -110,6 +110,7 @@ com/kfarms/dto/SuppliesResponseDto.class
 com/kfarms/dto/FishPondRequestDto.class
 com/kfarms/service/FeedService.class
 com/kfarms/entity/DailyTaskGenerator.class
+com/kfarms/catalog/InventoryCatalog.class
 com/kfarms/dto/TaskResponseDto$TaskResponseDtoBuilder.class
 com/kfarms/entity/Task.class
 com/kfarms/entity/FishHatch.class

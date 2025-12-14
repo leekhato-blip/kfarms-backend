@@ -5,6 +5,7 @@ import com.kfarms.dto.InventoryResponseDto;
 import com.kfarms.entity.InventoryCategory;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Map;
 
 public interface InventoryService {
@@ -15,5 +16,6 @@ public interface InventoryService {
     void delete(Long id, String deletedBy);
     void restore(Long id);
     Map<String, Object> getSummary();
+    List<Map<String, Object>> getLowFeedItems();
     void adjustStock(String itemName, InventoryCategory category, int quantityChange, String unit, String note);
 }

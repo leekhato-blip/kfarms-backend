@@ -12,7 +12,7 @@ import java.time.LocalDate;
 @Entity
 @Table(name = "supplies")
 @RequiredArgsConstructor
-public class Supplies extends Auditable{
+public class Supplies extends Auditable {
     @Id
     @GeneratedValue private Long id;
 

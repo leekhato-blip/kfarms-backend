@@ -3,8 +3,11 @@ package com.kfarms.controller;
 import com.kfarms.dto.InventoryRequestDto;
 import com.kfarms.dto.InventoryResponseDto;
 import com.kfarms.entity.ApiResponse;
+import com.kfarms.entity.Inventory;
+import com.kfarms.entity.InventoryCategory;
 import com.kfarms.service.InventoryService;
 import jakarta.validation.Valid;
+import org.apache.coyote.Response;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -14,7 +17,9 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/inventory")
@@ -83,6 +88,14 @@ public class InventoryController {
 
     }
 
+    @GetMapping("/watchlist")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER','STAFF')")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> feedWatchlist() {
+        List<Map<String, Object>> watchlist = service.getLowFeedItems();
+        return ResponseEntity.ok(new ApiResponse<>(true, "Low feed items fetched", watchlist));
+    }
+
+
     // DELETE - delete an inventory item by ID
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
@@ -115,5 +128,37 @@ public class InventoryController {
                 new ApiResponse<>(true, "Inventory summary fetched", summary)
         );
     }
+
+    // GET /api/inventory/catalog/items?category=FEED
+    @GetMapping("/catalog/items")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER') or hasRole('STAFF')")
+    public ResponseEntity<ApiResponse<List<String>>> getItemsByCategory(
+            @RequestParam InventoryCategory category
+    ) {
+        List<String> items = com.kfarms.catalog.InventoryCatalog.itemsForCategory(category);
+        return ResponseEntity.ok(new ApiResponse<>(true, "Catalog items fetched", items));
+    }
+
+    // GET /api/inventory/catalog/threshold?itemName=Fish Feed 1mm
+    @GetMapping("/catalog/threshold")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER') or hasRole('STAFF')")
+    public ResponseEntity<ApiResponse<Integer>> getDefaultThreshold(
+            @RequestParam String itemName,
+            @RequestParam InventoryCategory category
+    ) {
+        Optional<String> canonicalOpt = com.kfarms.catalog.InventoryCatalog.getCanonicalName(category, itemName);
+        if (canonicalOpt.isEmpty()) {
+            return ResponseEntity.badRequest().body(
+                    new ApiResponse<>(false, "Unknown feed item: " + itemName, 0)
+            );
+        }
+
+        int threshold = com.kfarms.catalog.InventoryCatalog.getDefaultThreshold(canonicalOpt.get());
+        return ResponseEntity.ok(new ApiResponse<>(true, "Default threshold fetched", threshold));
+    }
+
+
+
+
 
 }

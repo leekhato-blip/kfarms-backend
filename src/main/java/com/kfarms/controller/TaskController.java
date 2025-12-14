@@ -21,7 +21,7 @@ public class TaskController {
     private final TaskService service;
 
     @GetMapping("/upcoming")
-    public ResponseEntity<ApiResponse<List<TaskResponseDto>>> upcoming(@RequestParam(value = "limit", defaultValue = "6") int limit) {
+    public ResponseEntity<ApiResponse<List<TaskResponseDto>>> upcoming(@RequestParam(value = "limit", defaultValue = "4") int limit) {
         var tasks = service.getUpcoming(limit);
         var response = tasks.stream().map(this::toDto).collect(Collectors.toList());
         return ResponseEntity.ok(

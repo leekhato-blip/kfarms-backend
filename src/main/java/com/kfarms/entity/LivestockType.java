@@ -8,6 +8,4 @@ public enum LivestockType {
     NOILER,
     BROILER,
     OTHER // fallback if needed
-
-    // add types if needed
 }

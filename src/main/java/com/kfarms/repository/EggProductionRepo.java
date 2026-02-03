@@ -2,6 +2,7 @@ package com.kfarms.repository;
 
 import com.kfarms.entity.EggProduction;
 import com.kfarms.entity.Feed;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
@@ -24,6 +25,20 @@ public interface EggProductionRepo extends JpaRepository<EggProduction, Long>, J
     List<Object[]> findDailyEggsBetween(@Param("start") LocalDate start, @Param("end") LocalDate end);
 
     List<EggProduction> findAllByCollectionDateBetween(LocalDate start, LocalDate end);
+
+
+
+    @Query("""
+    select e from EggProduction e
+    join e.livestock l
+    where lower(l.batchName) like lower(concat('%', :q, '%'))
+       or (e.note is not null and lower(e.note) like lower(concat('%', :q, '%')))
+    order by e.createdAt desc
+""")
+    List<EggProduction> searchByLivestockOrNote(
+            @Param("q") String q,
+            Pageable pageable
+    );
 }
 
 

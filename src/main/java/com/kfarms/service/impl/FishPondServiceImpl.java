@@ -3,10 +3,7 @@ package com.kfarms.service.impl;
 import com.kfarms.dto.FishPondRequestDto;
 import com.kfarms.dto.FishPondResponseDto;
 import com.kfarms.dto.StockAdjustmentRequestDto;
-import com.kfarms.entity.FishFeedingSchedule;
-import com.kfarms.entity.FishPond;
-import com.kfarms.entity.FishPondStatus;
-import com.kfarms.entity.FishPondType;
+import com.kfarms.entity.*;
 import com.kfarms.exceptions.ResourceNotFoundException;
 import com.kfarms.mapper.FishPondMapper;
 import com.kfarms.repository.FishPondRepository;
@@ -52,20 +49,30 @@ public class FishPondServiceImpl implements FishPondService {
             String pondName,
             String pondType,
             String status,
-            LocalDate lastWaterChange
+            LocalDate lastWaterChange,
+            Boolean deleted
     ) {
-        Pageable pageable = PageRequest.of(page, size, Sort.by("id").descending());
-        Specification<FishPond> spec = (root, query, cb) ->  {
+        Sort sort = Boolean.TRUE.equals(deleted)
+                ? Sort.by(Sort.Direction.DESC, "deletedAt").and(Sort.by(Sort.Direction.DESC, "id"))
+                : Sort.by(Sort.Direction.DESC, "id");
 
+        Pageable pageable = PageRequest.of(page, size, sort);
+
+        Specification<FishPond> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
+
+            // deleted filter (default: show non-deleted)
+            if (Boolean.TRUE.equals(deleted)) {
+                predicates.add(cb.isTrue(root.get("deleted")));
+            } else {
+                predicates.add(cb.isFalse(root.get("deleted")));
+            }
 
             // Filter: pondName (case-insensitive contains)
             if (pondName != null && !pondName.isBlank()) {
-                try {
-                    predicates.add(cb.like(cb.lower(root.get("pondName")), "%" + pondName.toLowerCase() + "%"));
-                } catch (IllegalArgumentException e) {
-                    throw new IllegalArgumentException("Invalid pond status: " + status);
-                }
+                predicates.add(
+                        cb.like(cb.lower(root.get("pondName")), "%" + pondName.trim().toLowerCase() + "%")
+                );
             }
 
             // Filter: pondType (enum)
@@ -80,16 +87,23 @@ public class FishPondServiceImpl implements FishPondService {
 
             // Filter: status (enum)
             if (status != null && !status.isBlank()) {
-                predicates.add(cb.equal(root.get("status"), FishPondStatus.valueOf(status.toUpperCase())));
+                try {
+                    FishPondStatus statusEnum = FishPondStatus.valueOf(status.trim().toUpperCase());
+                    predicates.add(cb.equal(root.get("status"), statusEnum));
+                } catch (IllegalArgumentException e) {
+                    throw new IllegalArgumentException("Invalid pond status: " + status);
+                }
             }
+
+            // Filter: lastWaterChange
             if (lastWaterChange != null) {
                 predicates.add(cb.equal(root.get("lastWaterChange"), lastWaterChange));
             }
+
             return cb.and(predicates.toArray(new Predicate[0]));
         };
 
         Page<FishPond> fishPondPage = repo.findAll(spec, pageable);
-
 
         List<FishPondResponseDto> items = fishPondPage.getContent().stream()
                 .map(f -> {
@@ -98,6 +112,7 @@ public class FishPondServiceImpl implements FishPondService {
                     return dto;
                 })
                 .toList();
+
         Map<String, Object> result = new HashMap<>();
         result.put("items", items);
         result.put("page", page);
@@ -107,7 +122,6 @@ public class FishPondServiceImpl implements FishPondService {
         result.put("hasPrevious", fishPondPage.hasPrevious());
 
         return result;
-
     }
 
     // READ - get fishPond by ID
@@ -208,6 +222,15 @@ public class FishPondServiceImpl implements FishPondService {
         repo.save(entity);
     }
 
+
+    // DELETE (permanent)
+    @Override
+    public void permanentDelete(Long id, String deletedBy) {
+        FishPond entity = repo.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("FishPond", "id", id));
+        repo.delete(entity);
+    }
+
     // RESTORE
     public void restore(Long id) {
         FishPond entity = repo.findById(id)
@@ -242,6 +265,12 @@ public class FishPondServiceImpl implements FishPondService {
                 .mapToInt(f -> Optional.ofNullable(f.getCapacity()).orElse(0))
                 .sum();
 
+        // Total empty ponds
+        long emptyPonds = all.stream()
+                .filter(f -> Optional.ofNullable(f.getCurrentStock()).orElse(0) == 0)
+                .count();
+        summary.put("totalEmptyPonds", emptyPonds);
+
         // Total Mortality
         int totalMortality = all.stream()
                 .mapToInt(f -> Optional.ofNullable(f.getMortalityCount()).orElse(0))
@@ -249,15 +278,44 @@ public class FishPondServiceImpl implements FishPondService {
 
         // status breakdown
         Map<String, Long> countByStatus = all.stream()
-                        .filter(f -> f.getStatus() != null)
-                        .collect(Collectors.groupingBy(f -> f.getStatus().name(), Collectors.counting()));
+                .filter(f -> f.getStatus() != null)
+                .collect(Collectors.groupingBy(
+                        f -> f.getStatus().name(),
+                        Collectors.counting()
+                ));
 
         // total by pondType
         Map<String, Long> countByType = all.stream()
-                        .filter(f -> f.getPondType() != null)
-                                .collect(Collectors.groupingBy(f -> f.getPondType().name(), Collectors.counting()));
+                .filter(f -> f.getPondType() != null)
+                .collect(Collectors.groupingBy(
+                        f -> f.getPondType().name(),
+                        Collectors.counting()
+                ));
 
-        summary.put("totalFishPonds", all.size()); // Total FishPond record
+        // ===================== Monthly stock totals (Jan–Dec 2026) =====================
+        int year = 2026;
+        LocalDate start = LocalDate.of(year, 1, 1);
+        LocalDate end = LocalDate.of(year, 12, 31);
+
+        Map<String, Long> monthlyStockTotals = new LinkedHashMap<>();
+        for (int m = 1; m <= 12; m++) {
+            monthlyStockTotals.put(String.format("%04d-%02d", year, m), 0L);
+        }
+
+        // IMPORTANT:
+        // This must come from a "stock records / movements / stocking events" table.
+        // If you don’t have that table, monthly stock totals can’t be historically correct.
+        // Replace fishStockRepo with your actual repo (e.g. FishPondStockingRepo, FishStockRecordRepo, etc.)
+        for (Object[] row : repo.sumMonthlyStockTotals(start, end)) {
+            int y = ((Number) row[0]).intValue();
+            int m = ((Number) row[1]).intValue();
+            long total = row[2] == null ? 0L : ((Number) row[2]).longValue();
+            monthlyStockTotals.put(String.format("%04d-%02d", y, m), total);
+        }
+
+        summary.put("monthlyStockTotals", monthlyStockTotals);
+
+        summary.put("totalFishPonds", all.size());
         summary.put("totalFishes", totalFishes);
         summary.put("totalQuantity", totalQuantity);
         summary.put("totalMortality", totalMortality);
@@ -270,8 +328,6 @@ public class FishPondServiceImpl implements FishPondService {
                 .filter(Objects::nonNull)
                 .max(LocalDate::compareTo)
                 .ifPresent(last -> summary.put("lastUpdated", last));
-
-
 
         // === 🌟 ALERT LOGIC ===
         Map<String, Object> alerts = new HashMap<>();
@@ -291,16 +347,18 @@ public class FishPondServiceImpl implements FishPondService {
         if (totalFishes > 0) {
             double mortalityRate = (double) totalMortality / totalFishes * 100;
             if (mortalityRate > 10) {
-                alerts.put("highMortality", "High mortality detected in fish ponds!");
+                String msg = String.format("Mortality rate is %.2f%% — above 10%% threshold.", mortalityRate);
+                alerts.put("highMortality", msg);
                 notification.createNotification(
                         "FISH",
-                        "High Mortality", String.format("Mortality rate is %.2f%% — above 10%% threshold.", mortalityRate),
+                        "High Mortality",
+                        msg,
                         null
                 );
             }
         }
 
-        //  💧 Water Change Reminder
+        // 💧 Water Change Reminder
         LocalDate today = LocalDate.now();
         List<FishPond> dueForWaterChange = all.stream()
                 .filter(f -> {
@@ -309,15 +367,20 @@ public class FishPondServiceImpl implements FishPondService {
                 })
                 .toList();
 
-        if (!dueForWaterChange.isEmpty()) {
-            alerts.put("waterChangeDue", dueForWaterChange.size() + " pond(s) need water change.");
+        int dueCount = dueForWaterChange.size();
+        summary.put("dueWaterChangeCount", dueCount);
+
+        if (dueCount > 0) {
+            String msg = dueCount + " pond(s) need water change.";
+            alerts.put("waterChangeDue", msg);
             notification.createNotification(
-                    "Fish",
+                    "FISH",
                     "Water Change Due",
-                    dueForWaterChange.size() + " pond(s) require water change today or earlier.",
+                    dueCount + " pond(s) require water change today or earlier.",
                     null
             );
         }
+
         summary.put("alerts", alerts);
         return summary;
     }

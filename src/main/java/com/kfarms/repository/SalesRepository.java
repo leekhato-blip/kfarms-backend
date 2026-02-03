@@ -4,16 +4,22 @@ import com.kfarms.entity.Sales;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Repository
-public interface SalesRepository extends JpaRepository<Sales, Long>, JpaSpecificationExecutor<Sales> {
+public interface SalesRepository
+        extends JpaRepository<Sales, Long>,
+        JpaSpecificationExecutor<Sales> {
+
 
     @Query("SELECT s.salesDate, SUM(s.totalPrice) FROM Sales s WHERE s.salesDate BETWEEN :start AND :end GROUP BY s.salesDate ORDER BY s.salesDate ASC")
     List<Object[]> findDailySalesBetween(@Param("start") LocalDate start, @Param("end") LocalDate end);
@@ -38,5 +44,22 @@ public interface SalesRepository extends JpaRepository<Sales, Long>, JpaSpecific
     List<Object[]> getMonthlyRevenue(@Param("year") int year);
 
     List<Sales> findAllByOrderByCreatedAtDesc(Pageable pageable);
+
+    @Modifying
+    @Transactional
+    @Query("""
+    DELETE FROM Sales s
+    WHERE s.deleted = true
+      AND s.deletedAt <= :threshold
+""")
+    int cleanupOldSoftDeleted(@Param("threshold") LocalDateTime threshold);
+
+
+    @Query("""
+    select s from Sales s
+    where lower(s.itemName) like lower(concat('%', :q, '%'))
+    """)
+        List<Sales> searchByItemName(@Param("q") String q, Pageable pageable);
+
 
 }

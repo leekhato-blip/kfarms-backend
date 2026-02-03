@@ -2,6 +2,7 @@ package com.kfarms.repository;
 
 import com.kfarms.entity.Inventory;
 import com.kfarms.entity.InventoryCategory;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
@@ -25,5 +26,12 @@ public interface InventoryRepository extends JpaRepository<Inventory, Long>, Jpa
     List<Inventory> findByLastUpdatedBetween(@Param("start") LocalDate start, @Param("end") LocalDate end);
 
     List<Inventory> findAllByLastUpdatedBetween(LocalDate start, LocalDate end);
+
+    @Query("""
+    select i from Inventory i
+    where lower(i.itemName) like lower(concat('%', :q, '%'))
+    order by i.lastUpdated desc
+    """)
+    List<Inventory> searchByItemName(@Param("q") String q, Pageable pageable);
 }
 

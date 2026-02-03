@@ -23,7 +23,7 @@ import java.time.LocalDateTime;
 @Data
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @SQLDelete(sql = "UPDATE #{#entityName} SET deleted = true, deleted_at = CURRENT_TIMESTAMP WHERE id = ?")
-@Where(clause = "deleted = false")
+//@Where(clause = "deleted = false")
 public abstract class Auditable {
 
     @CreatedBy

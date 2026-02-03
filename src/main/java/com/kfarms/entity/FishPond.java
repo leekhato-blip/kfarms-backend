@@ -40,7 +40,7 @@ public class FishPond extends Auditable{
     private FishPondStatus status = FishPondStatus.ACTIVE; // ACTIVE, EMPTY, MAINTENANCE - defaults to ACTIVE
 
     // LOCATION
-    private FishPondLocation pondLocation;
+    private FishPondLocation pondLocation = FishPondLocation.FARM;
 
     // DATES
     private LocalDate dateStocked = LocalDate.now(); // when fish were added

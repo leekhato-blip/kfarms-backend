@@ -160,6 +160,7 @@ public class FeedServiceImpl implements FeedService {
     }
 
     // SUMMARY
+    // SUMMARY
     @Override
     public Map<String, Object> getSummary() {
         List<Feed> all = repo.findAll()
@@ -169,73 +170,63 @@ public class FeedServiceImpl implements FeedService {
 
         Map<String, Object> summary = new HashMap<>();
 
-        // total feed batches (records)
+        // -----------------------------
+        // Existing summary fields
+        // -----------------------------
+
         summary.put("totalFeeds", all.size());
 
-        // total quantity of all feeds
         int totalQuantityUsed = all.stream()
                 .mapToInt(f -> f.getQuantityUsed() != null ? f.getQuantityUsed() : 0)
                 .sum();
         summary.put("totalQuantityUsed", totalQuantityUsed);
 
-        // count by type
         Map<String, Long> countByType = all.stream()
                 .collect(Collectors.groupingBy(f -> f.getBatchType().name(), Collectors.counting()));
         summary.put("countByType", countByType);
 
-        // sum quantity by type
         Map<String, Integer> quantityByType = all.stream()
                 .collect(Collectors.groupingBy(
                         f -> f.getBatchType().name(),
                         Collectors.summingInt(f -> f.getQuantityUsed() != null ? f.getQuantityUsed() : 0)
                 ));
-        int grandTotal = quantityByType.values()
-                        .stream()
-                                .mapToInt(Integer::intValue)
-                                        .sum();
 
+        int grandTotal = quantityByType.values().stream().mapToInt(Integer::intValue).sum();
         List<Map<String, Object>> breakdown = new ArrayList<>();
 
-        if(grandTotal > 0) {
+        if (grandTotal > 0) {
             quantityByType.forEach((type, qty) -> {
                 double percentage = (qty * 100.0) / grandTotal;
 
                 String label;
                 switch (type) {
-                    case "LAYERS":
-                        label = "Poultry";
-                        break;
-                    case "FISH":
-                        label = "Fish";
-                        break;
-                    case "DUCKS":
-                        label = "Ducks";
-                        break;
-                    default:
-                        label = "others";
+                    case "LAYERS": label = "Poultry"; break;
+                    case "FISH": label = "Fish"; break;
+                    case "DUCKS": label = "Ducks"; break;
+                    default: label = "others";
                 }
 
                 Map<String, Object> entry = new HashMap<>();
                 entry.put("label", label);
-                entry.put("value", Math.round(percentage)); // round to whole %
+                entry.put("value", Math.round(percentage));
                 breakdown.add(entry);
             });
         }
         summary.put("feedBreakdown", breakdown);
 
-        // sum quantity used per month
         int usedThisMonth = all.stream()
-                .filter(f -> f.getDate() != null && f.getDate().getMonth().equals(LocalDate.now().getMonth()))
+                .filter(f -> f.getDate() != null && f.getDate().getMonth().equals(LocalDate.now().getMonth())
+                        && f.getDate().getYear() == LocalDate.now().getYear())
                 .mapToInt(f -> f.getQuantityUsed() != null ? f.getQuantityUsed() : 0)
                 .sum();
         summary.put("usedThisMonth", usedThisMonth);
 
-        // last feed added date
         all.stream()
                 .map(Feed::getCreatedAt)
                 .filter(Objects::nonNull)
                 .max(LocalDateTime::compareTo)
                 .ifPresent(lastDate -> summary.put("lastFeedDate", lastDate));
+
         if (usedThisMonth > 100) {
             notification.createNotification(
                     "FEED",
@@ -254,7 +245,220 @@ public class FeedServiceImpl implements FeedService {
             );
         }
 
+        // -----------------------------
+        // NEW: Top feeds by usage
+        // -----------------------------
+        List<Map<String, Object>> topFeedsByUsage = all.stream()
+                .filter(f -> f.getFeedName() != null && !f.getFeedName().isBlank())
+                .collect(Collectors.groupingBy(
+                        Feed::getFeedName,
+                        Collectors.summingInt(f -> f.getQuantityUsed() != null ? f.getQuantityUsed() : 0)
+                ))
+                .entrySet()
+                .stream()
+                .sorted((a, b) -> Integer.compare(b.getValue(), a.getValue()))
+                .limit(5)
+                .map(e -> {
+                    Map<String, Object> m = new HashMap<>();
+                    m.put("label", e.getKey());
+                    m.put("value", e.getValue());
+                    return m;
+                })
+                .toList();
+        summary.put("topFeedsByUsage", topFeedsByUsage);
+
+        // -----------------------------
+        // NEW: Stock by category (starter/grower/finisher/etc)
+        // This is inferred from feedName keywords.
+        // -----------------------------
+        Map<String, Integer> stockByCategory = new LinkedHashMap<>();
+        stockByCategory.put("starter", 0);
+        stockByCategory.put("grower", 0);
+        stockByCategory.put("finisher", 0);
+        stockByCategory.put("layer", 0);
+        stockByCategory.put("broiler", 0);
+        stockByCategory.put("fish", 0);
+        stockByCategory.put("other", 0);
+
+        // NOTE: Without inventory-on-hand per item, we can only classify USED quantities from feeds table.
+        // If inventory provides real on-hand by product, we’ll overwrite this below (when available).
+        all.forEach(f -> {
+            int qty = (f.getQuantityUsed() != null ? f.getQuantityUsed() : 0);
+            String key = inferFeedCategory(f.getFeedName());
+            stockByCategory.put(key, stockByCategory.getOrDefault(key, 0) + qty);
+        });
+        summary.put("stockByCategory", stockByCategory);
+
+        // -----------------------------
+        // NEW: Recent feed transactions (from feeds table)
+        // type = batchType (since Feed currently represents consumption records)
+        // unitCost = null unless inventory transactions provide it (below)
+        // -----------------------------
+        List<Map<String, Object>> recentFeedTransactions = all.stream()
+                .sorted((a, b) -> {
+                    LocalDateTime da = a.getCreatedAt();
+                    LocalDateTime db = b.getCreatedAt();
+                    if (da == null && db == null) return 0;
+                    if (da == null) return 1;
+                    if (db == null) return -1;
+                    return db.compareTo(da);
+                })
+                .limit(10)
+                .map(f -> {
+                    Map<String, Object> tx = new HashMap<>();
+                    tx.put("id", f.getId());
+                    tx.put("type", f.getBatchType() != null ? f.getBatchType().name() : "UNKNOWN");
+                    tx.put("quantity", f.getQuantityUsed() != null ? f.getQuantityUsed() : 0);
+                    tx.put("unitCost", null); // will be enhanced if inventory transactions exist
+                    tx.put("date", f.getDate() != null ? f.getDate() : null);
+                    return tx;
+                })
+                .toList();
+        summary.put("recentFeedTransactions", recentFeedTransactions);
+
+        // -----------------------------
+        // NEW: Inventory-driven summary (safe reflection calls)
+        // If your InventoryService has these, they’ll be used:
+        //  - Map getCategorySummary(InventoryCategory category)
+        //  - List<Map> getRecentTransactions(InventoryCategory category, int limit)
+        // -----------------------------
+        Map<String, Object> invSummary = tryInvokeMap(inventoryService, "getCategorySummary",
+                new Class[]{InventoryCategory.class},
+                new Object[]{InventoryCategory.FEED}
+        );
+
+        // defaults
+        summary.put("lowStockCount", 0);
+        summary.put("reorderCount", 0);
+        summary.put("totalStockOnHand", 0);
+        summary.put("unit", "kg");
+        summary.put("avgUnitCost", 0.0);
+        summary.put("monthlySpend", 0.0);
+
+        if (invSummary != null && !invSummary.isEmpty()) {
+            summary.put("lowStockCount", asInt(invSummary.get("lowStockCount")));
+            summary.put("reorderCount", asInt(invSummary.get("reorderCount")));
+            summary.put("totalStockOnHand", asInt(invSummary.get("totalStockOnHand")));
+            summary.put("unit", invSummary.get("unit") != null ? invSummary.get("unit") : "kg");
+            summary.put("avgUnitCost", asDouble(invSummary.get("avgUnitCost")));
+
+            // If inventory already gives monthlySpend, use it, else estimate from usedThisMonth * avgUnitCost
+            Object ms = invSummary.get("monthlySpend");
+            if (ms != null) {
+                summary.put("monthlySpend", asDouble(ms));
+            } else {
+                double avgCost = asDouble(summary.get("avgUnitCost"));
+                summary.put("monthlySpend", usedThisMonth * avgCost);
+            }
+        }
+
+        // Inventory-based recent transactions (if available): overwrite/merge unitCost + better types
+        List<Map<String, Object>> invTx = tryInvokeListOfMaps(inventoryService, "getRecentTransactions",
+                new Class[]{InventoryCategory.class, int.class},
+                new Object[]{InventoryCategory.FEED, 10}
+        );
+
+        if (invTx != null && !invTx.isEmpty()) {
+            // Expecting each tx map: id, type, quantity, unitCost, date
+            summary.put("recentFeedTransactions", invTx);
+
+            // If we have unitCost + quantity for this month, compute monthlySpend more accurately
+            double spend = invTx.stream()
+                    .filter(m -> isInCurrentMonth(m.get("date")))
+                    .mapToDouble(m -> asDouble(m.get("unitCost")) * asDouble(m.get("quantity")))
+                    .sum();
+            if (spend > 0) summary.put("monthlySpend", spend);
+
+            // If avgUnitCost missing, compute weighted avg from invTx (for current month or all tx)
+            double totalQty = invTx.stream().mapToDouble(m -> asDouble(m.get("quantity"))).sum();
+            double totalCost = invTx.stream().mapToDouble(m -> asDouble(m.get("unitCost")) * asDouble(m.get("quantity"))).sum();
+            if (totalQty > 0) summary.put("avgUnitCost", totalCost / totalQty);
+        }
+
         return summary;
     }
+
+    // -----------------------------
+    // Helpers (add below getSummary)
+    // -----------------------------
+
+    private String inferFeedCategory(String feedName) {
+        if (feedName == null) return "other";
+        String s = feedName.trim().toLowerCase();
+
+        if (s.contains("starter")) return "starter";
+        if (s.contains("grower")) return "grower";
+        if (s.contains("finisher")) return "finisher";
+        if (s.contains("layer")) return "layer";
+        if (s.contains("broiler")) return "broiler";
+        if (s.contains("fish") || s.contains("catfish") || s.contains("tilapia")) return "fish";
+
+        return "other";
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> tryInvokeMap(Object target, String method, Class<?>[] paramTypes, Object[] args) {
+        try {
+            var m = target.getClass().getMethod(method, paramTypes);
+            Object out = m.invoke(target, args);
+            if (out instanceof Map) return (Map<String, Object>) out;
+            return null;
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> tryInvokeListOfMaps(Object target, String method, Class<?>[] paramTypes, Object[] args) {
+        try {
+            var m = target.getClass().getMethod(method, paramTypes);
+            Object out = m.invoke(target, args);
+            if (out instanceof List) return (List<Map<String, Object>>) out;
+            return null;
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private int asInt(Object v) {
+        if (v == null) return 0;
+        if (v instanceof Number n) return n.intValue();
+        try { return Integer.parseInt(String.valueOf(v)); } catch (Exception e) { return 0; }
+    }
+
+    private double asDouble(Object v) {
+        if (v == null) return 0.0;
+        if (v instanceof Number n) return n.doubleValue();
+        try { return Double.parseDouble(String.valueOf(v)); } catch (Exception e) { return 0.0; }
+    }
+
+    private boolean isInCurrentMonth(Object dateObj) {
+        if (dateObj == null) return false;
+
+        // If it's already a LocalDate
+        if (dateObj instanceof LocalDate d) {
+            LocalDate now = LocalDate.now();
+            return d.getMonth() == now.getMonth() && d.getYear() == now.getYear();
+        }
+
+        // If it's a LocalDateTime
+        if (dateObj instanceof LocalDateTime dt) {
+            LocalDate now = LocalDate.now();
+            return dt.getMonth() == now.getMonth() && dt.getYear() == now.getYear();
+        }
+
+        // If it's a String (ISO expected)
+        try {
+            String s = String.valueOf(dateObj);
+            if (s.length() >= 10) {
+                LocalDate d = LocalDate.parse(s.substring(0, 10));
+                LocalDate now = LocalDate.now();
+                return d.getMonth() == now.getMonth() && d.getYear() == now.getYear();
+            }
+        } catch (Exception ignored) {}
+
+        return false;
+    }
+
 
 }

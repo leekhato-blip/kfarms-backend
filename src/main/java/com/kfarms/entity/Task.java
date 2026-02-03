@@ -13,6 +13,8 @@ import java.time.LocalDateTime;
 @Setter
 @Getter
 @NoArgsConstructor @AllArgsConstructor @Builder
+@EqualsAndHashCode(callSuper = true)
+
 public class Task extends Auditable {
 
     @Id

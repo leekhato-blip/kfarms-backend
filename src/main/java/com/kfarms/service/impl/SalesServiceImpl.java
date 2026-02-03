@@ -40,28 +40,26 @@ public class SalesServiceImpl implements SalesService {
     public SalesResponseDto create(SalesRequestDto dto) {
         Sales entity = SalesMapper.toEntity(dto);
         Sales saved = salesRepo.save(entity);
-        // Auto update inventory if NOT LIVESTOCK
-//        if (entity.getCategory() != SalesCategory.LIVESTOCK && entity.getCategory() != SalesCategory.FISH) {
-//            inventoryService.adjustStock(
-//                    entity.getItemName(),
-//                    InventoryCategory.valueOf(entity.getCategory().name()),
-//                    -entity.getQuantity(),
-//                    "units",
-//                    "Sold to " + (entity.getBuyer() != null ? entity.getBuyer() : "Walk-in customer")
-//            );
-//        }
         return SalesMapper.toResponseDto(saved);
     }
 
     // READ - get all sales with pagination & filters
     @Override
-    public Map<String, Object> getAll(int page, int size, String itemName, String category, LocalDate date) {
-        Pageable pageable = PageRequest.of(page, size, Sort.by("id").descending());
+    public Map<String, Object> getAll(int page, int size, String itemName, String category, LocalDate date, Boolean deleted) {
+
+        Sort sort = Boolean.TRUE.equals(deleted)
+                ? Sort.by(Sort.Direction.DESC, "deletedAt")
+                .and(Sort.by(Sort.Direction.DESC, "id"))
+                : Sort.by(Sort.Direction.DESC, "id");
+
+        Pageable pageable = PageRequest.of(page, size, sort);
+
         Specification<Sales> spec = (root, query, cb) -> {
 
           List<Predicate> predicates = new ArrayList<>();
-          predicates.add(cb.isFalse(root.get("deleted")));
-
+          if (deleted != null) {
+              predicates.add(cb.equal(root.get("deleted"), deleted));
+          }
 
             if (itemName != null && !itemName.isBlank()) {
               predicates.add(cb.like(cb.lower(root.get("itemName")), "%" + itemName.toLowerCase() + "%"));
@@ -70,7 +68,7 @@ public class SalesServiceImpl implements SalesService {
               predicates.add(cb.like(cb.lower(root.get("category")), "%" + category.toLowerCase() + "%"));
           }
           if (date != null) {
-              predicates.add(cb.equal(root.get("date"), date));
+              predicates.add(cb.equal(root.get("salesDate"), date));
           }
           return cb.and(predicates.toArray(new Predicate[0]));
         };
@@ -136,6 +134,14 @@ public class SalesServiceImpl implements SalesService {
         entity.setDeletedAt(LocalDateTime.now());
         entity.setUpdatedBy(deletedBy);
         salesRepo.save(entity);
+    }
+
+    // DELETE (permanent)
+    @Override
+    public void permanentDelete(Long id, String deletedBy) {
+        Sales entity = salesRepo.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Sales", "id", id));
+        salesRepo.delete(entity);
     }
 
     // RESTORE

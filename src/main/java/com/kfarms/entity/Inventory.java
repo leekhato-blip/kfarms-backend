@@ -13,6 +13,8 @@ import java.util.Date;
 )
 @Data
 @RequiredArgsConstructor
+@EqualsAndHashCode(callSuper = true)
+
 public class Inventory extends Auditable{
     @Id
     @GeneratedValue private Long id;

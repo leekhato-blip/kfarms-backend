@@ -26,5 +26,12 @@ public interface FeedRepository extends JpaRepository<Feed, Long>, JpaSpecificat
 
     List<Feed> findAllByOrderByCreatedAtDesc(Pageable pageable);
 
+    @Query("""
+    select f from Feed f
+    where lower(f.feedName) like lower(concat('%', :q, '%'))
+    order by f.createdAt desc
+    """)
+    List<Feed> searchByName(@Param("q") String q, Pageable pageable);
+
 
 }

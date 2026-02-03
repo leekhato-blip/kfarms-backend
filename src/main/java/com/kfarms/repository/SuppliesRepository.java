@@ -4,12 +4,15 @@ import com.kfarms.entity.Supplies;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 @Repository
 public interface SuppliesRepository extends JpaRepository<Supplies, Long>, JpaSpecificationExecutor<Supplies> {
@@ -38,5 +41,20 @@ public interface SuppliesRepository extends JpaRepository<Supplies, Long>, JpaSp
 
     List<Supplies> findAllByOrderByCreatedAtDesc(Pageable pageable);
 
+    @Modifying
+    @Transactional
+    @Query("""
+    DELETE FROM Supplies s
+    WHERE s.deleted = true
+      AND s.deletedAt <= :threshold
+""")
+    int cleanupOldSoftDeleted(@Param("threshold") LocalDateTime threshold);
 
+    @Query("""
+    select s from Supplies s
+    where s.deleted = false
+      and lower(s.itemName) like lower(concat('%', :q, '%'))
+    order by s.createdAt desc
+    """)
+    List<Supplies> searchByItemName(@Param("q") String q, Pageable pageable);
 }

@@ -3,6 +3,7 @@ package com.kfarms.repository;
 import com.kfarms.entity.Feed;
 import com.kfarms.entity.Livestock;
 import com.kfarms.entity.LivestockType;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
@@ -30,5 +31,12 @@ public interface LivestockRepository extends JpaRepository<Livestock, Long>, Jpa
     );
 
     List<Livestock> findAllByArrivalDateBetween(LocalDate start, LocalDate end);
+    @Query("""
+    select l from Livestock l
+    where lower(l.batchName) like lower(concat('%', :q, '%'))
+       or (l.note is not null and lower(l.note) like lower(concat('%', :q, '%')))
+    order by l.createdAt desc
+""")
+    List<Livestock> searchByNameOrBatch(@Param("q") String q, Pageable pageable);
 }
 

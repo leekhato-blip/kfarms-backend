@@ -43,26 +43,45 @@ public class SuppliesServiceImpl implements SuppliesService {
         Supplies saved = repo.save(entity);
 
         // auto update inventory if not livestock
+
         if (saved.getCategory() != null && !saved.getCategory().name().equalsIgnoreCase("LIVESTOCK")) {
-            inventoryService.adjustStock(
-                    saved.getItemName(),
-                    InventoryCategory.valueOf(saved.getCategory().name()),
-                    saved.getQuantity(),
-                    "units",
-                    "Purchased from " + (entity.getSupplierName() != null ? entity.getSupplierName() : "Unknown supplier")
-                     + (entity.getNote() != null ? " | Note: " + entity.getNote() : "")
-            );
+            try {
+                inventoryService.adjustStock(
+                        saved.getItemName(),
+                        InventoryCategory.valueOf(saved.getCategory().name()),
+                        saved.getQuantity(),
+                        "units",
+                        "Purchased from " + (entity.getSupplierName() != null ? entity.getSupplierName() : "Unknown supplier")
+                                + (entity.getNote() != null ? " | Note: " + entity.getNote() : "")
+                );
+            } catch (IllegalArgumentException ex) {
+                // Category not present in InventoryCategory (e.g., LIVESTOCK) — skip inventory update
+                //log.warn("Skipping inventory update for supply category: {}", saved.getCategory());
+            }
         }
+
+
         return SuppliesMapper.toResponseDto(saved);
     }
 
     // READ - get all with filtering & pagination
     @Override
-    public Map<String, Object> getAll(int page, int size, String itemName, String category, LocalDate date){
-        Pageable pageable = PageRequest.of(page, size, Sort.by("id").descending());
+    public Map<String, Object> getAll(int page, int size, String itemName, String category, LocalDate supplyDate, Boolean deleted){
+
+        Sort sort = Boolean.TRUE.equals(deleted)
+                ? Sort.by(Sort.Direction.DESC, "deletedAt")
+                .and(Sort.by(Sort.Direction.DESC, "id"))
+                : Sort.by(Sort.Direction.DESC, "id");
+
+        Pageable pageable = PageRequest.of(page, size, sort);
+
         Specification<Supplies> spec = (root, query, cb) -> {
 
-            List<Predicate> predicates = new ArrayList<>();
+        List<Predicate> predicates = new ArrayList<>();
+
+        if (deleted != null) {
+            predicates.add(cb.equal(root.get("deleted"), deleted));
+        }
 
           if (itemName != null && !itemName.isBlank()) {
               predicates.add(cb.like(cb.lower(root.get("itemName")), "%" + itemName.toLowerCase() + "%"));
@@ -70,8 +89,8 @@ public class SuppliesServiceImpl implements SuppliesService {
           if (category != null && !category.isBlank()) {
               predicates.add(cb.like(cb.lower(root.get("category")), "%" + category.toLowerCase() + "%"));
           }
-          if (date != null) {
-              predicates.add(cb.equal(root.get("date"), date));
+          if (supplyDate != null) {
+              predicates.add(cb.equal(root.get("supplyDate"), supplyDate));
           }
           return cb.and(predicates.toArray(new Predicate[0]));
         };
@@ -136,6 +155,14 @@ public class SuppliesServiceImpl implements SuppliesService {
         repo.save(entity);
     }
 
+    // DELETE (permanently)
+    @Override
+    public void permanentDelete(Long id, String deletedBy) {
+        Supplies entity = repo.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Supplies", "id", id));
+        repo.delete(entity);
+    }
+
     // RESTORE
     @Override
     public void restore(Long id) {
@@ -154,6 +181,9 @@ public class SuppliesServiceImpl implements SuppliesService {
     // SUMMARY
     @Override
     public Map<String, Object> getSummary() {
+
+        LocalDate today = LocalDate.now();
+
         List<Supplies> all = repo.findAll()
                 .stream()
                 .filter(s -> !Boolean.TRUE.equals(s.getDeleted()))
@@ -176,6 +206,24 @@ public class SuppliesServiceImpl implements SuppliesService {
                 .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         summary.put("totalAmountSpent", totalAmount);
+
+        // 🟣 Amount spend daily
+        BigDecimal spentToday = all.stream()
+                .filter(s -> s.getSupplyDate() != null && s.getSupplyDate().isEqual(today))
+                .map(Supplies::getTotalPrice)
+                .filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        summary.put("spentToday", spentToday);
+
+        // 🟣 Amount spend monthly
+        BigDecimal spentThisMonth = all.stream()
+                .filter(s -> s.getSupplyDate() != null &&
+                        s.getSupplyDate().getMonth() == today.getMonth() &&
+                        s.getSupplyDate().getYear() == today.getYear())
+                .map(Supplies::getTotalPrice)
+                .filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        summary.put("spentThisMonth", spentThisMonth);
 
         // 🟣 Amount spent by category
         Map<String, BigDecimal> amountByCategory = all.stream()

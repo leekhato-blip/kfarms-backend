@@ -24,11 +24,12 @@ import java.util.List;
 @Configuration
 @EnableWebSecurity // Enables Spring Security for the Farm app
 public class SecurityConfig {
+
     @Bean
-    public AuthenticationManager authManager(AuthenticationConfiguration config) throws Exception {
+    public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
         return config.getAuthenticationManager();
     }
-    // This method sets up all security rules for HTTP requests.
+
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http,
                                            JwtAuthenticationFilter jwtAuthFilter) throws Exception {
@@ -37,26 +38,21 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable()) // Disable CSRF useful for APIs
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(
-                                "/api/auth/signup",
-                                "/api/auth/login",
-                                "/api/auth/forgot-password",
-                                "/api/auth/reset-password"
-                        ).permitAll()
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
-                        // DELETE — only ADMIN can delete anything
-                        .requestMatchers(HttpMethod.DELETE, "/api/**").hasRole("ADMIN")
+                        // ✅ allow auth routes (covers both styles if you're unsure)
+                        .requestMatchers("/auth/**", "/api/auth/**").permitAll()
 
-                        // POST and PUT — ADMIN and MANAGER only (create/update across all entities)
-                        .requestMatchers(HttpMethod.POST, "/api/**").hasAnyRole("ADMIN", "MANAGER")
+                        .requestMatchers(HttpMethod.DELETE, "/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/**").hasAnyRole("ADMIN", "MANAGER")
+                        .requestMatchers(HttpMethod.PUT, "/**").hasAnyRole("ADMIN", "MANAGER")
+                        .requestMatchers(HttpMethod.PATCH, "/**").hasAnyRole("ADMIN", "MANAGER")
+                        .requestMatchers(HttpMethod.GET, "/**").hasAnyRole("ADMIN", "MANAGER", "STAFF")
 
-                        // GET — any authenticated user (ADMIN, MANAGER or STAFF)
-                        .requestMatchers(HttpMethod.GET, "/api/**").hasAnyRole("ADMIN", "MANAGER", "STAFF")
-
-                        // Everything else requires login
                         .anyRequest().authenticated()
+                )
 
-                ).addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
                 // Enable basic auth (username & password via browser/postman)
         return http.build(); // Build the security config
 
@@ -71,10 +67,11 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource(){
         CorsConfiguration config = new CorsConfiguration();
+        config.setAllowCredentials(true);
         config.setAllowedOrigins(List.of("http://localhost:5173",  "http://127.0.0.1:5173"));
         config.setAllowedMethods(List.of("GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"));
-        config.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-USER"));
-        config.setAllowCredentials(true);
+        config.setAllowedHeaders(List.of("Authorization", "Content-Type"));
+        config.setExposedHeaders(List.of("Set-Cookie"));
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);

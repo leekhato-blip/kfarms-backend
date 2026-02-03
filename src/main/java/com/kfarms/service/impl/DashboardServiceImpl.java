@@ -1,5 +1,6 @@
 package com.kfarms.service.impl;
 
+
 import com.kfarms.dto.DashboardSummaryDto;
 import com.kfarms.entity.*;
 import com.kfarms.repository.*;
@@ -19,6 +20,7 @@ import java.util.List;
 import java.util.Map;
 
 @Service
+//@Transactional(readOnly = true)
 @RequiredArgsConstructor
 public class DashboardServiceImpl implements DashboardService {
 

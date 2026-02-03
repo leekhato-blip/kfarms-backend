@@ -19,7 +19,7 @@ public class SuppliesResponseDto {
     private BigDecimal totalPrice;
     private String supplierName;
     private String note;
-    private LocalDate date;
+    private LocalDate supplyDate;
 
     private String createdBy;
     private String updatedBy;

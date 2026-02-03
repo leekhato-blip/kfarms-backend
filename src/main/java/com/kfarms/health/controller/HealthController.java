@@ -1,4 +1,4 @@
-package com.kfarms.health.controller;
+package com.kfarms.controller;
 
 
 import com.kfarms.entity.ApiResponse;

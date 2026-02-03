@@ -9,10 +9,11 @@ import java.util.Map;
 
 public interface SuppliesService {
     SuppliesResponseDto create(SuppliesRequestDto dto);
-    Map<String, Object> getAll(int page, int size, String itemName, String Category, LocalDate date);
+    Map<String, Object> getAll(int page, int size, String itemName, String Category, LocalDate date, Boolean deleted);
     SuppliesResponseDto getById(Long id);
     SuppliesResponseDto update(Long id, SuppliesRequestDto request, String updatedBy);
     void delete(Long id, String deletedBy);
+    void permanentDelete(Long id, String deletedBy);
     void restore(Long id);
     Map<String, Object> getSummary();
 }

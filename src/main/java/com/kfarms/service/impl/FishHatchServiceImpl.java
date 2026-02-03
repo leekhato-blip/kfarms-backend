@@ -4,6 +4,7 @@ import com.kfarms.dto.FishHatchRequestDto;
 import com.kfarms.dto.FishHatchResponseDto;
 import com.kfarms.entity.FishHatch;
 import com.kfarms.entity.FishPond;
+import com.kfarms.entity.FishPondType;
 import com.kfarms.exceptions.ResourceNotFoundException;
 import com.kfarms.mapper.FishHatchMapper;
 import com.kfarms.repository.FishHatchRepository;
@@ -13,8 +14,10 @@ import com.kfarms.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -62,30 +65,40 @@ public class FishHatchServiceImpl implements FishHatchService {
     // UPDATE
     @Override
     public FishHatchResponseDto update(Long id, FishHatchRequestDto request, String updatedBy) {
+
         FishHatch entity = hatchRepo.findById(id)
                 .filter(f -> !Boolean.TRUE.equals(f.getDeleted()))
                 .orElseThrow(() -> new ResourceNotFoundException("FishHatch", "id", id));
 
         FishPond pond = pondRepo.findById(request.getPondId())
+                .filter(p -> !Boolean.TRUE.equals(p.getDeleted()))
                 .orElseThrow(() -> new ResourceNotFoundException("FishPond", "id", request.getPondId()));
 
+        // --- core fields ---
         entity.setPond(pond);
+
         if (request.getHatchDate() != null) {
             entity.setHatchDate(request.getHatchDate());
         }
+
         entity.setMaleCount(request.getMaleCount());
         entity.setFemaleCount(request.getFemaleCount());
         entity.setQuantityHatched(request.getQuantityHatched());
         entity.setNote(request.getNote());
         entity.setUpdatedBy(updatedBy);
 
-        // recalculate hatch rate
+        // --- hatch rate (%) ---
         int totalParents = request.getMaleCount() + request.getFemaleCount();
-        entity.setHatchRate(totalParents > 0
-                ? (double) request.getQuantityHatched() / totalParents * 100
-                : 0.0);
+
+        double hatchRatePercent = totalParents > 0
+                ? (request.getQuantityHatched() * 100.0) / totalParents
+                : 0.0;
+
+        hatchRatePercent = Math.round(hatchRatePercent * 100.0) / 100.0; // 2dp
+        entity.setHatchRate(hatchRatePercent);
 
         hatchRepo.save(entity);
+
         return FishHatchMapper.toResponseDto(entity);
     }
 
@@ -145,7 +158,9 @@ public class FishHatchServiceImpl implements FishHatchService {
         Map<String, Long> hatchCountByPond = ponds.stream()
                 .collect(Collectors.toMap(
                         FishPond::getPondName,
-                        p -> countMap.getOrDefault(p.getId(), 0L)
+                        p -> countMap.getOrDefault(p.getId(), 0L),
+                        (a, b) -> a,
+                        LinkedHashMap::new
                 ));
 
         // Step 5: Build summary response
@@ -153,6 +168,41 @@ public class FishHatchServiceImpl implements FishHatchService {
         summary.put("totalHatchRecords", totalRecords);
         summary.put("hatchCountByPond", hatchCountByPond);
 
+        // ===================== Hatch by pond type (ALL TYPES WITH 0s) =====================
+        Map<String, Long> hatchCountByPondType = new LinkedHashMap<>();
+
+        // init all enum values to 0
+        for (FishPondType type : FishPondType.values()) {
+            hatchCountByPondType.put(type.name(), 0L);
+        }
+
+        // fill actual counts from DB
+        for (Object[] row : hatchRepo.countHatchesByPondType()) {
+            String pondType = String.valueOf(row[0]); // enum name
+            long count = row[1] == null ? 0L : ((Number) row[1]).longValue();
+            hatchCountByPondType.put(pondType, count);
+        }
+
+        summary.put("hatchCountByPondType", hatchCountByPondType);
+
+        // ===================== Monthly hatch totals (Jan–Dec 2026) =====================
+        int year = 2026;
+        LocalDate start = LocalDate.of(year, 1, 1);
+        LocalDate end = LocalDate.of(year, 12, 31);
+
+        Map<String, Long> monthlyHatchTotals = new LinkedHashMap<>();
+        for (int m = 1; m <= 12; m++) {
+            monthlyHatchTotals.put(String.format("%04d-%02d", year, m), 0L);
+        }
+
+        for (Object[] row : hatchRepo.sumMonthlyHatchTotals(start, end)) {
+            int y = ((Number) row[0]).intValue();
+            int m = ((Number) row[1]).intValue();
+            long total = row[2] == null ? 0L : ((Number) row[2]).longValue();
+            monthlyHatchTotals.put(String.format("%04d-%02d", y, m), total);
+        }
+
+        summary.put("monthlyHatchTotals", monthlyHatchTotals);
 
         // ==== NOTIFICATION ====
         if (totalRecords == 0) {

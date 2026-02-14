@@ -13,6 +13,7 @@ import com.kfarms.repository.EggProductionRepo;
 import com.kfarms.repository.LivestockRepository;
 import com.kfarms.service.LivestockService;
 import com.kfarms.service.NotificationService;
+import com.kfarms.tenant.TenantContext;
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -38,15 +39,12 @@ public class LivestockServiceImpl implements LivestockService {
     // CREATE - create Livestock
     @Override
     public  LivestockResponseDto create(LivestockRequestDto request, String createBy) {
+        Long tenantId = TenantContext.getTenantId();
         Livestock entity = LivestockMapper.toEntity(request);
+        entity.setTenantId(tenantId);
         entity.setCreatedBy(createBy);
         repo.save(entity);
         return LivestockMapper.toResponseDto(entity);
-    }
-
-    @Override
-    public Map<String, Object> getAll(int page, int size, String batchName, String type, LocalDate arrivalDate) {
-        return Map.of();
     }
 
     // READ - get all Livestock (Pagination and Filtering)
@@ -75,9 +73,13 @@ public class LivestockServiceImpl implements LivestockService {
 
         final LivestockType typeEnumFinal = typeEnum;
 
+        Long tenantId = TenantContext.getTenantId();
 
         Specification<Livestock> spec = (root, query, cb) -> {
+
             List<Predicate> predicates = new ArrayList<>();
+
+            predicates.add(cb.equal(root.get("tenantId"), tenantId));
 
             if (Boolean.TRUE.equals(deleted)) {
                 predicates.add(cb.isTrue(root.get("deleted")));
@@ -122,7 +124,9 @@ public class LivestockServiceImpl implements LivestockService {
     // READ - get Livestock by ID
     @Override
     public LivestockResponseDto getById(Long id) {
-        Livestock entity = repo.findById(id)
+        Long tenantId = TenantContext.getTenantId();
+
+        Livestock entity = repo.findByIdAndTenantId(id, tenantId)
                 .filter(l -> !Boolean.TRUE.equals(l.getDeleted()))
                 .orElseThrow(() -> new ResourceNotFoundException("Livestock", "id", id));
         return LivestockMapper.toResponseDto(entity);
@@ -131,7 +135,8 @@ public class LivestockServiceImpl implements LivestockService {
     // UPDATE - update existing Livestock
     @Override
     public LivestockResponseDto update(Long id, LivestockRequestDto request, String updatedBy){
-        Livestock entity = repo.findById(id)
+        Long tenantId = TenantContext.getTenantId();
+        Livestock entity = repo.findByIdAndTenantId(id, tenantId)
                 .filter(l -> !Boolean.TRUE.equals(l.getDeleted()))
                 .orElseThrow(() -> new ResourceNotFoundException("Livestock", "id", id));
 
@@ -184,7 +189,9 @@ public class LivestockServiceImpl implements LivestockService {
     // DELETE - delete livestock by ID
     @Override
     public void delete(Long id, String deletedBy){
-        Livestock entity = repo.findById(id)
+        Long tenantId = TenantContext.getTenantId();
+
+        Livestock entity = repo.findByIdAndTenantId(id, tenantId)
                         .orElseThrow(() -> new ResourceNotFoundException("Livestock", "id", id));
 
         if (Boolean.TRUE.equals(entity.getDeleted())) {
@@ -199,7 +206,8 @@ public class LivestockServiceImpl implements LivestockService {
     // DELETE (permanently)
     @Override
     public void permanentDelete(Long id, String deletedBy) {
-        Livestock entity = repo.findById(id)
+        Long tenantId = TenantContext.getTenantId();
+        Livestock entity = repo.findByIdAndTenantId(id, tenantId)
                 .orElseThrow(() -> new ResourceNotFoundException("Livestock", "id", id));
         repo.delete(entity);
     }
@@ -207,7 +215,8 @@ public class LivestockServiceImpl implements LivestockService {
     // RESTORE
     @Override
     public void restore(Long id) {
-        Livestock entity = repo.findById(id)
+        Long tenantId = TenantContext.getTenantId();
+        Livestock entity = repo.findByIdAndTenantId(id, tenantId)
                 .orElseThrow(() -> new ResourceNotFoundException("Livestock", "id", id));
 
         if (!Boolean.TRUE.equals(entity.getDeleted())) {
@@ -223,10 +232,12 @@ public class LivestockServiceImpl implements LivestockService {
     @Override
     public Map<String, Object> getSummary(){
         // filter out deleted items
-        List<Livestock> all = repo.findAll()
-                .stream()
-                .filter(l -> !Boolean.TRUE.equals(l.getDeleted()))
-                .toList();
+        Long tenantId = TenantContext.getTenantId();
+        List<Livestock> all = repo.findAllActive(tenantId);
+//        List<Livestock> all = repo.findAll()
+//                .stream()
+//                .filter(l -> !Boolean.TRUE.equals(l.getDeleted()))
+//                .toList();
 
         Map<String, Object> summary = new HashMap<>();
 
@@ -272,11 +283,9 @@ public class LivestockServiceImpl implements LivestockService {
 
     @Override
     public Map<String, Object> getOverview(int rangeDays) {
+        Long tenantId = TenantContext.getTenantId();
 
-        List<Livestock> all = repo.findAll()
-                .stream()
-                .filter(l -> !Boolean.TRUE.equals(l.getDeleted()))
-                .toList();
+        List<Livestock> all = repo.findAllActive(tenantId);
 
         int totalAlive = all.stream()
                 .mapToInt(l -> l.getCurrentStock() != null ? l.getCurrentStock() : 0)
@@ -424,6 +433,7 @@ public class LivestockServiceImpl implements LivestockService {
 
         return response;
     }
+
     private int calculateAgeWeeks(Livestock l) {
         int starting = l.getStartingAgeInWeeks() != 0 ? l.getStartingAgeInWeeks() : 0;
 
@@ -464,9 +474,11 @@ public class LivestockServiceImpl implements LivestockService {
     // ADJUST stock
     @Override
     public LivestockResponseDto adjustStock(Long id, StockAdjustmentRequestDto request, String updatedBy) {
-        Livestock livestock = repo.findById(id)
+        Long tenantId = TenantContext.getTenantId();
+
+        Livestock livestock = repo.findByIdAndTenantId(id, tenantId)
                 .filter(l -> !Boolean.TRUE.equals(l.getDeleted()))
-                .orElseThrow(() -> new ResourceNotFoundException("FishPond", "id", id));
+                .orElseThrow(() -> new ResourceNotFoundException("Livestock", "id", id));
 
         livestock.adjustStock(request.getQuantity(), request.getReason());
         livestock.setUpdatedBy(updatedBy);
@@ -474,6 +486,7 @@ public class LivestockServiceImpl implements LivestockService {
         repo.save(livestock);
         return LivestockMapper.toResponseDto(livestock);
     }
+
 
 
 }

@@ -7,6 +7,7 @@ import com.kfarms.entity.InventoryCategory;
 import com.kfarms.exceptions.ResourceNotFoundException;
 import com.kfarms.mapper.InventoryMapper;
 import com.kfarms.repository.InventoryRepository;
+import com.kfarms.repository.NotificationRepository;
 import com.kfarms.service.InventoryService;
 import com.kfarms.service.NotificationService;
 import jakarta.persistence.criteria.Predicate;
@@ -28,8 +29,8 @@ public class InventoryServiceImpl implements InventoryService {
 
     private final InventoryRepository repo;
     private final NotificationService notification;
+    private final NotificationRepository notificationRepo;
 
-    // CREATE - add new inventory item
     @Override
     public InventoryResponseDto create(InventoryRequestDto dto) {
         Inventory entity = InventoryMapper.toEntity(dto);
@@ -37,7 +38,6 @@ public class InventoryServiceImpl implements InventoryService {
         return InventoryMapper.toResponseDto(saved);
     }
 
-    // READ - get all inventory items with Pagination and Filters
     @Override
     public Map<String, Object> getAll(int page, int size, String itemName, String category, LocalDate lastUpdated) {
 
@@ -61,6 +61,7 @@ public class InventoryServiceImpl implements InventoryService {
         };
 
         Page<Inventory> inventoryPage = repo.findAll(spec, pageable);
+
         List<InventoryResponseDto> items = inventoryPage.getContent().stream()
                 .map(InventoryMapper::toResponseDto)
                 .toList();
@@ -75,11 +76,8 @@ public class InventoryServiceImpl implements InventoryService {
         result.put("hasPrevious", inventoryPage.hasPrevious());
 
         return result;
-
-
     }
 
-    // READ - get inventory item by ID
     @Override
     public InventoryResponseDto getById(Long id) {
         Optional<Inventory> inventory = repo.findById(id)
@@ -88,9 +86,9 @@ public class InventoryServiceImpl implements InventoryService {
         return inventory.map(InventoryMapper::toResponseDto).orElse(null);
     }
 
-    // UPDATE - update existing inventory by ID
     @Override
     public InventoryResponseDto update(Long id, InventoryRequestDto request, String updateBy) {
+
         Inventory entity = repo.findById(id)
                 .filter(i -> !Boolean.TRUE.equals(i.getDeleted()))
                 .orElseThrow(() -> new ResourceNotFoundException("Inventory", "id", id));
@@ -107,7 +105,6 @@ public class InventoryServiceImpl implements InventoryService {
         return InventoryMapper.toResponseDto(entity);
     }
 
-    // DELETE - delete existing inventory item by ID
     @Override
     public void delete(Long id, String deletedBy) {
         Inventory entity = repo.findById(id)
@@ -124,7 +121,6 @@ public class InventoryServiceImpl implements InventoryService {
         repo.save(entity);
     }
 
-    // RESTORE
     @Override
     public void restore(Long id) {
         Inventory entity = repo.findById(id)
@@ -139,9 +135,10 @@ public class InventoryServiceImpl implements InventoryService {
         repo.save(entity);
     }
 
-    // SUMMARY - Dashboard, Report and Analysis
+    // ✅ SUMMARY should NOT create notifications
     @Override
     public Map<String, Object> getSummary() {
+
         List<Inventory> all = repo.findAll()
                 .stream()
                 .filter(i -> !Boolean.TRUE.equals(i.getDeleted()))
@@ -149,20 +146,16 @@ public class InventoryServiceImpl implements InventoryService {
 
         Map<String, Object> summary = new HashMap<>();
 
-        // Total Inventory record
         summary.put("totalInventoryItems", all.size());
-
-        // Total Quantity
         summary.put("totalQuantity", all.stream().mapToInt(Inventory::getQuantity).sum());
 
-        // breakdown by category
         Map<String, Integer> categoryTotals = new HashMap<>();
         for (Inventory inv : all) {
             categoryTotals.merge(inv.getCategory().name(), inv.getQuantity(), Integer::sum);
         }
         summary.put("quantityByCategory", categoryTotals);
 
-        // low stock
+        // ✅ low stock list only (no notification creation here)
         List<Map<String, Object>> lowStock = all.stream()
                 .filter(i -> i.getQuantity() <= i.getMinThreshold())
                 .map(i -> {
@@ -170,20 +163,12 @@ public class InventoryServiceImpl implements InventoryService {
                     m.put("itemName", i.getItemName());
                     m.put("quantity", i.getQuantity());
                     m.put("threshold", i.getMinThreshold());
-
-                    // 🟣 Trigger notification when item is below threshold
-                    notification.createNotification(
-                            "GENERAL",
-                            "Low Stock Alert: " + i.getItemName(),
-                            "Item '" + i.getItemName() + "' is running low. (" + i.getQuantity() + " " + i.getUnit() + " left)",
-                            null
-                    );
                     return m;
                 })
                 .toList();
+
         summary.put("lowStockItems", lowStock);
 
-        // last updated
         all.stream()
                 .map(Inventory::getLastUpdated)
                 .filter(Objects::nonNull)
@@ -195,6 +180,7 @@ public class InventoryServiceImpl implements InventoryService {
 
     @Override
     public List<Map<String, Object>> getLowFeedItems() {
+
         List<Inventory> lowFeeds = repo.findAll().stream()
                 .filter(i -> !Boolean.TRUE.equals(i.getDeleted()))
                 .filter(i -> i.getCategory() == InventoryCategory.FEED)
@@ -214,8 +200,6 @@ public class InventoryServiceImpl implements InventoryService {
         return watchlist;
     }
 
-
-    // Auto update inventory
     @Override
     public void adjustStock(String itemName, InventoryCategory category, int quantityChange, String unit, String note) {
 
@@ -223,10 +207,8 @@ public class InventoryServiceImpl implements InventoryService {
             throw new IllegalArgumentException("itemName is required");
         }
 
-        // Always allow the provided item name, normalize whitespace
-       String canonicalName = itemName != null ? itemName.trim() : "Unknown Item";
+        String canonicalName = itemName.trim();
 
-        // 2) find by canonical name + category (repo query trims and lowercases)
         Inventory inventory = repo.findByItemNameAndCategory(canonicalName, category)
                 .filter(i -> !Boolean.TRUE.equals(i.getDeleted()))
                 .orElseGet(() -> {
@@ -235,7 +217,6 @@ public class InventoryServiceImpl implements InventoryService {
                     newInventory.setCategory(category);
                     newInventory.setQuantity(0);
                     newInventory.setUnit(unit != null ? unit : "units");
-                    // set default min threshold from catalog when available
                     int defaultThreshold = com.kfarms.catalog.InventoryCatalog.getDefaultThreshold(canonicalName);
                     newInventory.setMinThreshold(defaultThreshold);
                     newInventory.setNote(note);
@@ -256,5 +237,25 @@ public class InventoryServiceImpl implements InventoryService {
         if (note != null && !note.isBlank()) inventory.setNote(note);
 
         repo.save(inventory);
+
+        // ✅ Trigger low-stock notification ONLY when stock changes (here)
+        if (inventory.getQuantity() <= inventory.getMinThreshold()) {
+
+            String title = "Low Stock Alert: " + inventory.getItemName();
+            String msg = "Item '" + inventory.getItemName() + "' is running low. (" +
+                    inventory.getQuantity() + " " + inventory.getUnit() + " left)";
+
+            // ✅ Don't repeat same alert within 24 hours
+            LocalDateTime since = LocalDateTime.now().minusHours(24);
+
+            if (!notificationRepo.existsByTitleAndMessageAndCreatedAtAfter(title, msg, since)) {
+                notification.createNotification(
+                        "GENERAL",
+                        title,
+                        msg,
+                        null
+                );
+            }
+        }
     }
 }

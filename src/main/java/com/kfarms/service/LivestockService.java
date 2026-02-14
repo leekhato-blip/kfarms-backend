@@ -9,7 +9,6 @@ import java.time.LocalDate;
 import java.util.Map;
 
 public interface LivestockService {
-    Map<String, Object>  getAll(int page, int size, String batchName, String type, LocalDate arrivalDate);
 
     // READ - get all Livestock (Pagination and Filtering)
     Map<String, Object> getAll(int page, int size, String batchName, String type, LocalDate arrivalDate, Boolean deleted);

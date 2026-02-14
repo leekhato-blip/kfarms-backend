@@ -14,19 +14,22 @@ import java.time.temporal.ChronoUnit;
 @Table(
         name = "livestock",
         uniqueConstraints = {
-                @UniqueConstraint(columnNames = {"batchName"})
+                @UniqueConstraint(name = "uk_livestock_tenant_batch", columnNames = {"tenant_id", "batch_name"})
         }
 )
 @Data
 @RequiredArgsConstructor
-@EntityListeners(AuditingEntityListener.class)
 public class Livestock extends Auditable{
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, unique = true)
+    @Column(name = "tenant_id", nullable = false)
+    private Long tenantId;
+
+    @Column(name = "batch_name", nullable = false)
     private String batchName;
+
     private Integer currentStock;
 
     @Enumerated(EnumType.STRING)

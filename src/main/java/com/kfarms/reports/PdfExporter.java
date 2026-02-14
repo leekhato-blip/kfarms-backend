@@ -2,6 +2,8 @@ package com.kfarms.reports;
 
 import com.kfarms.entity.*;
 import com.kfarms.repository.*;
+import com.kfarms.tenant.Tenant;
+import com.kfarms.tenant.TenantContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -55,7 +57,8 @@ public class PdfExporter implements Exporter{
 
     @Override
     public InputStream exportLivestock(LocalDate start, LocalDate end) {
-        List<Livestock> livestock = livestockRepo.findAllByArrivalDateBetween(start, end);
+        Long tenantId = TenantContext.getTenantId();
+        List<Livestock> livestock = livestockRepo.findByArrivalDateBetween(tenantId, start, end);
         return build(livestock, "Livestock Report", LIVESTOCK_HEADERS);
     }
 

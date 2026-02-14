@@ -2,6 +2,7 @@ package com.kfarms.reports;
 
 import com.kfarms.entity.*;
 import com.kfarms.repository.*;
+import com.kfarms.tenant.TenantContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -67,7 +68,8 @@ public class ExcelExporter implements Exporter {
 
     @Override
     public InputStream exportLivestock(LocalDate start, LocalDate end) {
-        List<Livestock> livestock = livestockRepo.findAllByArrivalDateBetween(start, end);
+        Long tenantId = TenantContext.getTenantId();
+        List<Livestock> livestock = livestockRepo.findByArrivalDateBetween(tenantId, start, end);
 
         List<String> headers = Arrays.asList(LIVESTOCK_HEADERS);
             byte[] excelBytes = ExcelReportBuilder.buildWorkbook(livestock, "Livestock Report", headers);

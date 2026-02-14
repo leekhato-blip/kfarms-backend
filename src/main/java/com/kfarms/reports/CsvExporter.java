@@ -2,6 +2,7 @@ package com.kfarms.reports;
 
 import com.kfarms.entity.*;
 import com.kfarms.repository.*;
+import com.kfarms.tenant.TenantContext;
 import lombok.AllArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -74,7 +75,8 @@ public class CsvExporter implements Exporter {
 
     @Override
     public InputStream exportLivestock(LocalDate start, LocalDate end) {
-        List<Livestock> list = livestockRepo.findAllActive();
+        Long tenantId = TenantContext.getTenantId();
+        List<Livestock> list = livestockRepo.findAllActive(tenantId);
         StringBuilder sb = new StringBuilder("Batch,Type,Current Stock,ArrivalDate,Source,Starting Age (Weeks),Mortality\n");
         for (Livestock l : list){
             sb.append(l.getBatchName()).append(",");

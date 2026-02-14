@@ -80,7 +80,7 @@ public class NotificationServiceImpl implements NotificationService {
     // 🔵 Fetch unread notifications for specific user
     @Override
     public List<Notification> getUnreadNotificationByUser(Long userId) {
-        return notificationRepo.findByUserIdAndReadFalseOrderByCreatedAtDesc(userId);
+        return notificationRepo.findUnreadForUserOrGlobal(userId);
     }
 
     // 🟡 Mark one notification as read

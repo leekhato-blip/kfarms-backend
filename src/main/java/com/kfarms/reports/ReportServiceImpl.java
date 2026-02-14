@@ -1,6 +1,7 @@
 package com.kfarms.reports;
 
 import com.kfarms.repository.*;
+import com.kfarms.tenant.TenantContext;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.ByteArrayResource;
@@ -36,21 +37,23 @@ public class ReportServiceImpl implements ReportService{
         LocalDate end = m.plusMonths(1).minusDays(1);
 
         // Use repository aggregate queries to avoid loading all rows
+        Long tenantId = TenantContext.getTenantId();
         long eggs = eggRepo.sumEggsBetween(start, end);
         BigDecimal revenue = salesRepo.sumTotalBetween(start, end);
         BigDecimal expenses = suppliesRepo.sumSupplyCostBetween(start, end);
-        long livestock = livestockRepo.countAllActiveLivestock();
+        long livestock = livestockRepo.countAllActiveLivestock(tenantId);
         long fishPond = fishRepo.countTotalFishStock();
         return new MonthlySummaryDto(eggs, revenue, expenses, livestock, fishPond);
     }
 
     @Override
     public MonthlySummaryDto getRangeSummary(LocalDate startDate, LocalDate endDate) {
+        Long tenantId = TenantContext.getTenantId();
         // similar, just use startDate/endDate
         long eggs = eggRepo.sumEggsBetween(startDate, endDate);
         BigDecimal revenue = salesRepo.sumTotalBetween(startDate, endDate);
         BigDecimal expenses = computeExpensesBetween(startDate, endDate);
-        long livestock = livestockRepo.countAllActiveLivestock();
+        long livestock = livestockRepo.countAllActiveLivestock(tenantId);
         long fish = fishRepo.countTotalFishStock();
         return new MonthlySummaryDto(eggs, revenue, expenses, livestock, fish);
     }

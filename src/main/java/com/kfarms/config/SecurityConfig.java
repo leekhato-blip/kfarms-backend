@@ -1,6 +1,9 @@
 package com.kfarms.config;
 
+import com.kfarms.security.CustomUserDetailsService;
 import com.kfarms.security.JwtAuthenticationFilter;
+import com.kfarms.security.JwtService;
+import com.kfarms.tenant.TenantFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -17,7 +20,8 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
-import org.springframework.web.servlet.handler.HandlerMappingIntrospector;
+import com.kfarms.tenant.TenantMembershipFilter;
+
 
 import java.util.List;
 
@@ -31,8 +35,17 @@ public class SecurityConfig {
     }
 
     @Bean
+    public JwtAuthenticationFilter jwtAuthenticationFilter(JwtService jwtService,
+                                                           CustomUserDetailsService userDetailsService) {
+        return new JwtAuthenticationFilter(jwtService, userDetailsService);
+    }
+
+    @Bean
     public SecurityFilterChain filterChain(HttpSecurity http,
-                                           JwtAuthenticationFilter jwtAuthFilter) throws Exception {
+                                           JwtAuthenticationFilter jwtAuthFilter,
+                                           TenantFilter tenantFilter,
+                                           TenantMembershipFilter tenantMembershipFilter) throws Exception {
+
         http
                 .cors(Customizer.withDefaults())
                 .csrf(csrf -> csrf.disable()) // Disable CSRF useful for APIs
@@ -52,8 +65,10 @@ public class SecurityConfig {
                         .anyRequest().authenticated()
                 )
 
-                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
-                // Enable basic auth (username & password via browser/postman)
+                .addFilterBefore(tenantFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterAfter(tenantMembershipFilter, JwtAuthenticationFilter.class);
+        // Enable basic auth (username & password via browser/postman)
         return http.build(); // Build the security config
 
     }
@@ -70,7 +85,7 @@ public class SecurityConfig {
         config.setAllowCredentials(true);
         config.setAllowedOrigins(List.of("http://localhost:5173",  "http://127.0.0.1:5173"));
         config.setAllowedMethods(List.of("GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"));
-        config.setAllowedHeaders(List.of("Authorization", "Content-Type"));
+        config.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Tenant-Id"));
         config.setExposedHeaders(List.of("Set-Cookie"));
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

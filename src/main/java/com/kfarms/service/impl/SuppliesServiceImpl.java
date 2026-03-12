@@ -2,16 +2,18 @@ package com.kfarms.service.impl;
 
 import com.kfarms.dto.SuppliesRequestDto;
 import com.kfarms.dto.SuppliesResponseDto;
-import com.kfarms.entity.AppUser;
 import com.kfarms.entity.InventoryCategory;
-import com.kfarms.entity.Role;
 import com.kfarms.entity.Supplies;
+import com.kfarms.entity.SupplyCategory;
 import com.kfarms.exceptions.ResourceNotFoundException;
 import com.kfarms.mapper.SuppliesMapper;
 import com.kfarms.repository.SuppliesRepository;
 import com.kfarms.service.InventoryService;
 import com.kfarms.service.NotificationService;
 import com.kfarms.service.SuppliesService;
+import com.kfarms.tenant.entity.Tenant;
+import com.kfarms.tenant.repository.TenantRepository;
+import com.kfarms.tenant.service.TenantContext;
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -22,6 +24,7 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
@@ -34,12 +37,15 @@ public class SuppliesServiceImpl implements SuppliesService {
     private final SuppliesRepository repo;
     private final InventoryService inventoryService;
     private final NotificationService notification;
+    private final TenantRepository tenantRepository;
 
 
     // CREATE - add new supply item
     @Override
     public SuppliesResponseDto create(SuppliesRequestDto dto) {
+        Long tenantId = requireTenantId();
         Supplies entity = SuppliesMapper.toEntity(dto);
+        entity.setTenant(resolveTenant(tenantId));
         Supplies saved = repo.save(entity);
 
         // auto update inventory if not livestock
@@ -67,6 +73,7 @@ public class SuppliesServiceImpl implements SuppliesService {
     // READ - get all with filtering & pagination
     @Override
     public Map<String, Object> getAll(int page, int size, String itemName, String category, LocalDate supplyDate, Boolean deleted){
+        Long tenantId = requireTenantId();
 
         Sort sort = Boolean.TRUE.equals(deleted)
                 ? Sort.by(Sort.Direction.DESC, "deletedAt")
@@ -78,6 +85,7 @@ public class SuppliesServiceImpl implements SuppliesService {
         Specification<Supplies> spec = (root, query, cb) -> {
 
         List<Predicate> predicates = new ArrayList<>();
+        predicates.add(cb.equal(root.get("tenant").get("id"), tenantId));
 
         if (deleted != null) {
             predicates.add(cb.equal(root.get("deleted"), deleted));
@@ -115,7 +123,8 @@ public class SuppliesServiceImpl implements SuppliesService {
     // READ - get by ID
     @Override
     public SuppliesResponseDto getById(Long id){
-        Optional<Supplies> supplies = repo.findById(id)
+        Long tenantId = requireTenantId();
+        Optional<Supplies> supplies = repo.findByIdAndTenant_Id(id, tenantId)
                 .filter(s -> !Boolean.TRUE.equals(s.getDeleted()));
 
         return supplies.map(SuppliesMapper::toResponseDto).orElse(null);
@@ -124,15 +133,21 @@ public class SuppliesServiceImpl implements SuppliesService {
     // UPDATE - update existing supply item by ID
     @Override
     public SuppliesResponseDto update(Long id, SuppliesRequestDto request, String updatedBy) {
-        Supplies entity = repo.findById(id)
+        Long tenantId = requireTenantId();
+        Supplies entity = repo.findByIdAndTenant_Id(id, tenantId)
                 .filter(s -> !Boolean.TRUE.equals(s.getDeleted()))
                 .orElseThrow(() -> new ResourceNotFoundException("Supplies", "id", id));
 
         entity.setItemName(request.getItemName());
         entity.setSupplierName(request.getSupplierName());
+        if (request.getCategory() != null) {
+            entity.setCategory(SupplyCategory.valueOf(request.getCategory().toUpperCase(Locale.ROOT)));
+        }
         entity.setQuantity(request.getQuantity());
         entity.setUnitPrice(request.getUnitPrice());
-        entity.setSupplyDate(request.getSupplyDate());
+        entity.setTotalPrice(calculateTotalPrice(request.getQuantity(), request.getUnitPrice()));
+        entity.setSupplyDate(request.getSupplyDate() != null ? request.getSupplyDate() : entity.getSupplyDate());
+        entity.setNote(request.getNote());
         entity.setUpdatedBy(updatedBy);
 
         repo.save(entity);
@@ -142,7 +157,8 @@ public class SuppliesServiceImpl implements SuppliesService {
     // DELETE - delete by ID
     @Override
     public void delete(Long id, String deletedBy) {
-        Supplies entity = repo.findById(id)
+        Long tenantId = requireTenantId();
+        Supplies entity = repo.findByIdAndTenant_Id(id, tenantId)
                 .orElseThrow(() -> new ResourceNotFoundException("Supplies", "id", id));
 
         if (Boolean.TRUE.equals(entity.getDeleted())) {
@@ -158,7 +174,8 @@ public class SuppliesServiceImpl implements SuppliesService {
     // DELETE (permanently)
     @Override
     public void permanentDelete(Long id, String deletedBy) {
-        Supplies entity = repo.findById(id)
+        Long tenantId = requireTenantId();
+        Supplies entity = repo.findByIdAndTenant_Id(id, tenantId)
                 .orElseThrow(() -> new ResourceNotFoundException("Supplies", "id", id));
         repo.delete(entity);
     }
@@ -166,7 +183,8 @@ public class SuppliesServiceImpl implements SuppliesService {
     // RESTORE
     @Override
     public void restore(Long id) {
-        Supplies entity = repo.findById(id)
+        Long tenantId = requireTenantId();
+        Supplies entity = repo.findByIdAndTenant_Id(id, tenantId)
                 .orElseThrow(() -> new ResourceNotFoundException("Supplies", "id", id));
 
         if (!Boolean.TRUE.equals(entity.getDeleted())) {
@@ -182,12 +200,11 @@ public class SuppliesServiceImpl implements SuppliesService {
     @Override
     public Map<String, Object> getSummary() {
 
+        Long tenantId = TenantContext.getTenantId();
+
         LocalDate today = LocalDate.now();
 
-        List<Supplies> all = repo.findAll()
-                .stream()
-                .filter(s -> !Boolean.TRUE.equals(s.getDeleted()))
-                .toList();
+        List<Supplies> all = repo.findAllActiveByTenantId(tenantId);
 
         Map<String, Object> summary = new HashMap<>();
 
@@ -256,6 +273,7 @@ public class SuppliesServiceImpl implements SuppliesService {
         // ==== ALERTS ====
         if (totalQuantity < 10) {
             notification.createNotification(
+                    tenantId,
                     "SUPPLIES",
                     "Low Supply Stock",
                     "Overall supplies are running low. Current total quantity: " + totalQuantity,
@@ -266,6 +284,7 @@ public class SuppliesServiceImpl implements SuppliesService {
         BigDecimal limit = new BigDecimal("500000");
         if (totalAmount.compareTo(limit) > 0) {
             notification.createNotification(
+                    tenantId,
                     "FINANCE",
                     "High Supply Expenses",
                     "This month's total expenses on supplies have exceeded ₦500,000",
@@ -281,6 +300,7 @@ public class SuppliesServiceImpl implements SuppliesService {
                 .ifPresent(lastDate -> {
                     if (lastDate.isBefore(LocalDate.now().minusDays(30))) {
                         notification.createNotification(
+                                tenantId,
                                 "SUPPLIES",
                                 "No Recent Supply",
                                 "No new supplies have been recorded since " + lastDate,
@@ -291,5 +311,25 @@ public class SuppliesServiceImpl implements SuppliesService {
 
 
         return summary;
+    }
+
+    private BigDecimal calculateTotalPrice(Integer quantity, BigDecimal unitPrice) {
+        if (quantity == null || unitPrice == null) {
+            return BigDecimal.ZERO;
+        }
+        return unitPrice.multiply(BigDecimal.valueOf(quantity.longValue())).setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private Long requireTenantId() {
+        Long tenantId = TenantContext.getTenantId();
+        if (tenantId == null) {
+            throw new IllegalStateException("Missing tenant context");
+        }
+        return tenantId;
+    }
+
+    private Tenant resolveTenant(Long tenantId) {
+        return tenantRepository.findById(tenantId)
+                .orElseThrow(() -> new ResourceNotFoundException("Tenant", "id", tenantId));
     }
 }

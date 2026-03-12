@@ -11,8 +11,10 @@ import com.kfarms.repository.FishHatchRepository;
 import com.kfarms.repository.FishPondRepository;
 import com.kfarms.service.FishHatchService;
 import com.kfarms.service.NotificationService;
+import com.kfarms.tenant.service.TenantContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -20,6 +22,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Service
@@ -34,21 +37,23 @@ public class FishHatchServiceImpl implements FishHatchService {
     // CREATE
     @Override
     public FishHatchResponseDto create(FishHatchRequestDto request){
-        FishPond pond = pondRepo.findById(request.getPondId())
-                .filter(f -> !Boolean.TRUE.equals(f.getDeleted()))
-                .orElseThrow(() -> new ResourceNotFoundException("FishPond", "id", request.getPondId()));
+        FishPond pond = getTenantPond(request.getPondId());
 
         FishHatch entity = FishHatchMapper.toEntity(request, pond);
+        entity.setTenant(pond.getTenant());
         FishHatch saved = hatchRepo.save(entity);
         return FishHatchMapper.toResponseDto(saved);
     }
 
     // READ
     @Override
-    public List<FishHatchResponseDto> getAll(){
-        return hatchRepo.findAll()
-                .stream()
-                .filter(f -> !Boolean.TRUE.equals(f.getDeleted()))
+    public List<FishHatchResponseDto> getAll(Boolean deleted){
+        Long tenantId = requireTenantId();
+        List<FishHatch> hatchRecords = Boolean.TRUE.equals(deleted)
+                ? hatchRepo.findAllByTenant_IdAndDeletedTrue(tenantId)
+                : hatchRepo.findAllByTenant_IdAndDeletedFalse(tenantId);
+
+        return hatchRecords.stream()
                 .map(FishHatchMapper::toResponseDto)
                 .collect(Collectors.toList());
     }
@@ -56,9 +61,7 @@ public class FishHatchServiceImpl implements FishHatchService {
     // READ - by ID
     @Override
     public FishHatchResponseDto getById(Long id){
-        FishHatch hatch = hatchRepo.findById(id)
-                .filter(f -> !Boolean.TRUE.equals(f.getDeleted()))
-                .orElseThrow(() -> new ResourceNotFoundException("FishHatch", "id", id));
+        FishHatch hatch = getTenantHatch(id, false);
         return FishHatchMapper.toResponseDto(hatch);
     }
 
@@ -66,16 +69,12 @@ public class FishHatchServiceImpl implements FishHatchService {
     @Override
     public FishHatchResponseDto update(Long id, FishHatchRequestDto request, String updatedBy) {
 
-        FishHatch entity = hatchRepo.findById(id)
-                .filter(f -> !Boolean.TRUE.equals(f.getDeleted()))
-                .orElseThrow(() -> new ResourceNotFoundException("FishHatch", "id", id));
-
-        FishPond pond = pondRepo.findById(request.getPondId())
-                .filter(p -> !Boolean.TRUE.equals(p.getDeleted()))
-                .orElseThrow(() -> new ResourceNotFoundException("FishPond", "id", request.getPondId()));
+        FishHatch entity = getTenantHatch(id, false);
+        FishPond pond = getTenantPond(request.getPondId());
 
         // --- core fields ---
         entity.setPond(pond);
+        entity.setTenant(pond.getTenant());
 
         if (request.getHatchDate() != null) {
             entity.setHatchDate(request.getHatchDate());
@@ -104,9 +103,9 @@ public class FishHatchServiceImpl implements FishHatchService {
 
     // DELETE
     @Override
+    @Transactional
     public void delete(Long id, String deletedBy){
-        FishHatch entity = hatchRepo.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("FishHatch", "id", id));
+        FishHatch entity = getTenantHatch(id, true);
 
         if (Boolean.TRUE.equals(entity.getDeleted())) {
             throw new IllegalArgumentException("Fish hatch record with ID " + id + " has already been deleted");
@@ -118,11 +117,28 @@ public class FishHatchServiceImpl implements FishHatchService {
         hatchRepo.save(entity);
     }
 
+    @Override
+    @Transactional
+    public void permanentDelete(Long id, String deletedBy) {
+        Long tenantId = requireTenantId();
+        FishHatch entity = getTenantHatch(id, true);
+
+        if (!Boolean.TRUE.equals(entity.getDeleted())) {
+            throw new IllegalArgumentException("Fish hatch record with ID " + id + " must be moved to trash before permanent delete");
+        }
+
+        pondRepo.clearHatchBatchReferences(entity.getId(), tenantId);
+        int deletedCount = hatchRepo.hardDeleteByIdAndTenantId(entity.getId(), tenantId);
+        if (deletedCount == 0) {
+            throw new ResourceNotFoundException("FishHatch", "id", id);
+        }
+    }
+
     // RESTORE
     @Override
+    @Transactional
     public void restore(Long id) {
-        FishHatch entity = hatchRepo.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("FishHatch", "id", id));
+        FishHatch entity = getTenantHatch(id, true);
 
         if (!Boolean.TRUE.equals(entity.getDeleted())) {
             throw new IllegalArgumentException("Fish hatch record with ID " + id + " has already been restored");
@@ -136,25 +152,20 @@ public class FishHatchServiceImpl implements FishHatchService {
     // SUMMARY - analysis and reports
     @Override
     public Map<String, Object> getSummary() {
-        long totalRecords = hatchRepo.count();
-
-        // Step 1: Get all ponds (non-deleted)
+        Long tenantId = requireTenantId();
+        List<FishHatch> activeHatches = hatchRepo.findAllByTenant_IdAndDeletedFalse(tenantId);
         List<FishPond> ponds = pondRepo.findAll()
                 .stream()
                 .filter(p -> !Boolean.TRUE.equals(p.getDeleted()))
+                .filter(p -> p.getTenant() != null && Objects.equals(p.getTenant().getId(), tenantId))
                 .toList();
 
-        // Step 2: Get counts grouped by pondId
-        List<Object[]> counts = hatchRepo.countHatchesGroupedByPond();
+        long totalRecords = activeHatches.size();
 
-        // Step 3: Convert count results to a quick lookup map
-        Map<Long, Long> countMap = counts.stream()
-                .collect(Collectors.toMap(
-                        row -> (Long) row[0],   // pondId
-                        row -> (Long) row[1]    // hatch count
-                ));
+        Map<Long, Long> countMap = activeHatches.stream()
+                .filter(h -> h.getPond() != null && h.getPond().getId() != null)
+                .collect(Collectors.groupingBy(h -> h.getPond().getId(), Collectors.counting()));
 
-        // Step 4: Build final { pondName: count } map (show 0 if no record)
         Map<String, Long> hatchCountByPond = ponds.stream()
                 .collect(Collectors.toMap(
                         FishPond::getPondName,
@@ -163,30 +174,24 @@ public class FishHatchServiceImpl implements FishHatchService {
                         LinkedHashMap::new
                 ));
 
-        // Step 5: Build summary response
         Map<String, Object> summary = new HashMap<>();
         summary.put("totalHatchRecords", totalRecords);
         summary.put("hatchCountByPond", hatchCountByPond);
 
-        // ===================== Hatch by pond type (ALL TYPES WITH 0s) =====================
         Map<String, Long> hatchCountByPondType = new LinkedHashMap<>();
-
-        // init all enum values to 0
         for (FishPondType type : FishPondType.values()) {
             hatchCountByPondType.put(type.name(), 0L);
         }
-
-        // fill actual counts from DB
-        for (Object[] row : hatchRepo.countHatchesByPondType()) {
-            String pondType = String.valueOf(row[0]); // enum name
-            long count = row[1] == null ? 0L : ((Number) row[1]).longValue();
-            hatchCountByPondType.put(pondType, count);
-        }
+        activeHatches.stream()
+                .map(FishHatch::getPond)
+                .filter(Objects::nonNull)
+                .map(FishPond::getPondType)
+                .filter(Objects::nonNull)
+                .forEach(type -> hatchCountByPondType.put(type.name(), hatchCountByPondType.get(type.name()) + 1));
 
         summary.put("hatchCountByPondType", hatchCountByPondType);
 
-        // ===================== Monthly hatch totals (Jan–Dec 2026) =====================
-        int year = 2026;
+        int year = LocalDate.now().getYear();
         LocalDate start = LocalDate.of(year, 1, 1);
         LocalDate end = LocalDate.of(year, 12, 31);
 
@@ -195,25 +200,47 @@ public class FishHatchServiceImpl implements FishHatchService {
             monthlyHatchTotals.put(String.format("%04d-%02d", year, m), 0L);
         }
 
-        for (Object[] row : hatchRepo.sumMonthlyHatchTotals(start, end)) {
-            int y = ((Number) row[0]).intValue();
-            int m = ((Number) row[1]).intValue();
-            long total = row[2] == null ? 0L : ((Number) row[2]).longValue();
-            monthlyHatchTotals.put(String.format("%04d-%02d", y, m), total);
-        }
+        activeHatches.stream()
+                .filter(h -> h.getHatchDate() != null)
+                .filter(h -> !h.getHatchDate().isBefore(start) && !h.getHatchDate().isAfter(end))
+                .forEach(h -> {
+                    String key = String.format("%04d-%02d", h.getHatchDate().getYear(), h.getHatchDate().getMonthValue());
+                    monthlyHatchTotals.put(key, monthlyHatchTotals.getOrDefault(key, 0L) + h.getQuantityHatched());
+                });
 
         summary.put("monthlyHatchTotals", monthlyHatchTotals);
+        summary.put("fryHatchedTotal", activeHatches.stream().mapToLong(FishHatch::getQuantityHatched).sum());
+        summary.put("avgHatchRate", activeHatches.stream().mapToDouble(FishHatch::getHatchRate).average().orElse(0.0));
+        summary.put("dueWaterChangeCount", 0L);
 
-        // ==== NOTIFICATION ====
-        if (totalRecords == 0) {
-            notification.createNotification(
-                    "FISH",
-                    "No Hatch Records Found",
-                    "There are no fish hatch records in the system.",
-                    null
-            );
-        }
 
         return summary;
+    }
+
+    private Long requireTenantId() {
+        Long tenantId = TenantContext.getTenantId();
+        if (tenantId == null) {
+            throw new IllegalStateException("Missing tenant context");
+        }
+        return tenantId;
+    }
+
+    private FishPond getTenantPond(Long pondId) {
+        Long tenantId = requireTenantId();
+        return pondRepo.findById(pondId)
+                .filter(p -> !Boolean.TRUE.equals(p.getDeleted()))
+                .filter(p -> p.getTenant() != null && Objects.equals(p.getTenant().getId(), tenantId))
+                .orElseThrow(() -> new ResourceNotFoundException("FishPond", "id", pondId));
+    }
+
+    private FishHatch getTenantHatch(Long id, boolean includeDeleted) {
+        Long tenantId = requireTenantId();
+        FishHatch hatch = hatchRepo.findByIdAndTenant_Id(id, tenantId)
+                .orElseThrow(() -> new ResourceNotFoundException("FishHatch", "id", id));
+
+        if (!includeDeleted && Boolean.TRUE.equals(hatch.getDeleted())) {
+            throw new ResourceNotFoundException("FishHatch", "id", id);
+        }
+        return hatch;
     }
 }

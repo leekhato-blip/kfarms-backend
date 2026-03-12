@@ -5,6 +5,8 @@ import com.kfarms.dto.FeedRequestDto;
 import com.kfarms.dto.FeedResponseDto;
 import com.kfarms.entity.ApiResponse;
 import com.kfarms.service.FeedService;
+import com.kfarms.tenant.entity.TenantPlan;
+import com.kfarms.tenant.service.TenantPlanGuardService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -23,6 +25,7 @@ import java.util.Map;
 @RequestMapping("/api/feeds")
 public class FeedController {
     private final FeedService service;
+    private final TenantPlanGuardService tenantPlanGuardService;
 
     // CREATE - add new feed
     @PostMapping
@@ -41,11 +44,18 @@ public class FeedController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(required = false) String batchType,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam(required = false, defaultValue = "false") Boolean deleted
             ) {
         System.out.println("batchType param received: '" + batchType + "'");
+        if (Boolean.TRUE.equals(deleted)) {
+            tenantPlanGuardService.requireCurrentTenantPlanAccess(
+                    TenantPlan.PRO,
+                    "Trash restore is available on the Pro plan."
+            );
+        }
 
-        Map<String, Object> response = service.getAll(page, size, batchType, date);
+        Map<String, Object> response = service.getAll(page, size, batchType, date, deleted);
         return ResponseEntity.ok(new ApiResponse<>(true, "Feeds fetched successfully", response));
     }
 
@@ -89,10 +99,30 @@ public class FeedController {
         );
     }
 
+    // PERMANENT DELETE
+    @DeleteMapping("/{id}/permanent")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<String>> permanentDelete(@PathVariable Long id) {
+        tenantPlanGuardService.requireCurrentTenantPlanAccess(
+                TenantPlan.PRO,
+                "Trash restore is available on the Pro plan."
+        );
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String deletedBy = auth != null ? auth.getName() : "SYSTEM";
+        service.permanentDelete(id, deletedBy);
+        return ResponseEntity.ok(
+                new ApiResponse<>(true, "Feed record deleted permanently", null)
+        );
+    }
+
     // RESTORE
     @PutMapping("/{id}/restore")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<String>> restore(@PathVariable Long id) {
+        tenantPlanGuardService.requireCurrentTenantPlanAccess(
+                TenantPlan.PRO,
+                "Trash restore is available on the Pro plan."
+        );
         service.restore(id);
         return ResponseEntity.ok(
                 new ApiResponse<>(true, "Feed record restored", null)

@@ -64,7 +64,7 @@ public class AuthController {
 
         // Encode the password using BCrypt
         user.setPassword(passwordEncoder.encode(user.getPassword()));
-        user.setRole(Role.ADMIN); // default role
+        user.setRole(Role.USER); // default role
 
         // Save the new user in the database
         userRepo.save(user);

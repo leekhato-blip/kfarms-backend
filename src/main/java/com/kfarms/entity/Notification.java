@@ -2,6 +2,7 @@ package com.kfarms.entity;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.kfarms.tenant.entity.Tenant;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -35,5 +36,10 @@ public class Notification {
     @JoinColumn(name = "user_id")
     @JsonIgnore
     private AppUser user;
+
+    @ManyToOne(optional = false)
+    @JoinColumn(name = "tenant_id", nullable = false)
+    private Tenant tenant;
+
 
 }

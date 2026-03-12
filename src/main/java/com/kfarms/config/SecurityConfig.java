@@ -1,15 +1,17 @@
 package com.kfarms.config;
 
 import com.kfarms.security.CustomUserDetailsService;
+import com.kfarms.security.DemoAccountMutationFilter;
 import com.kfarms.security.JwtAuthenticationFilter;
 import com.kfarms.security.JwtService;
-import com.kfarms.tenant.TenantFilter;
+import com.kfarms.tenant.service.TenantFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -20,13 +22,14 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
-import com.kfarms.tenant.TenantMembershipFilter;
+import com.kfarms.tenant.service.TenantMembershipFilter;
 
 
 import java.util.List;
 
 @Configuration
 @EnableWebSecurity // Enables Spring Security for the Farm app
+@EnableMethodSecurity
 public class SecurityConfig {
 
     @Bean
@@ -43,6 +46,7 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http,
                                            JwtAuthenticationFilter jwtAuthFilter,
+                                           DemoAccountMutationFilter demoAccountMutationFilter,
                                            TenantFilter tenantFilter,
                                            TenantMembershipFilter tenantMembershipFilter) throws Exception {
 
@@ -51,23 +55,26 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable()) // Disable CSRF useful for APIs
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
-                        // ✅ allow auth routes (covers both styles if you're unsure)
-                        .requestMatchers("/auth/**", "/api/auth/**").permitAll()
+                                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                                .requestMatchers("/auth/**", "/api/auth/**").permitAll()
+                                .requestMatchers("/api/billing/paystack/webhook").permitAll()
 
-                        .requestMatchers(HttpMethod.DELETE, "/**").hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.POST, "/**").hasAnyRole("ADMIN", "MANAGER")
-                        .requestMatchers(HttpMethod.PUT, "/**").hasAnyRole("ADMIN", "MANAGER")
-                        .requestMatchers(HttpMethod.PATCH, "/**").hasAnyRole("ADMIN", "MANAGER")
-                        .requestMatchers(HttpMethod.GET, "/**").hasAnyRole("ADMIN", "MANAGER", "STAFF")
+                                // tenant bootstrap endpoints (no tenant header required)
+                                .requestMatchers("/api/tenants/**").authenticated()
 
-                        .anyRequest().authenticated()
+                                // ROOTS platform endpoints (global admin only)
+                                .requestMatchers("/platform/**").hasRole("PLATFORM_ADMIN")
+
+                                // everything else requires login (tenant filters + membership filter will enforce roles)
+                                .anyRequest().authenticated()
                 )
 
-                .addFilterBefore(tenantFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
-                .addFilterAfter(tenantMembershipFilter, JwtAuthenticationFilter.class);
+                .addFilterAfter(demoAccountMutationFilter, JwtAuthenticationFilter.class)
+                .addFilterAfter(tenantFilter, DemoAccountMutationFilter.class)
+                .addFilterAfter(tenantMembershipFilter, TenantFilter.class);
+
         // Enable basic auth (username & password via browser/postman)
         return http.build(); // Build the security config
 

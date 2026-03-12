@@ -5,6 +5,7 @@ import com.kfarms.dto.RecentActivityDto;
 import com.kfarms.repository.FeedRepository;
 import com.kfarms.repository.SalesRepository;
 import com.kfarms.repository.SuppliesRepository;
+import com.kfarms.tenant.service.TenantContext;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -26,12 +27,16 @@ public class RecentActivitiesService {
     private FeedRepository feedRepo;
 
     public List<RecentActivityDto> getRecentActivities(int limit) {
+        Long tenantId = TenantContext.getTenantId();
+        if (tenantId == null) {
+            throw new IllegalStateException("Missing tenant context");
+        }
 
         int perCategory = Math.max(1, limit / 3);
         Pageable pageable = PageRequest.of(0, perCategory);
 
         List<RecentActivityDto> sales = salesRepo
-                .findAllByOrderByCreatedAtDesc(pageable)
+                .findAllByOrderByCreatedAtDesc(tenantId, pageable)
                 .stream()
                 .map(s -> new RecentActivityDto(
                         "sale-" + s.getId(),
@@ -44,7 +49,7 @@ public class RecentActivitiesService {
                 .toList();
 
         List<RecentActivityDto> supplies = suppliesRepo
-                .findAllByOrderByCreatedAtDesc(pageable)
+                .findAllByOrderByCreatedAtDesc(tenantId, pageable)
                 .stream()
                 .map(s -> new RecentActivityDto(
                         "supply-" + s.getId(),

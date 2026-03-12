@@ -5,6 +5,8 @@ import com.kfarms.dto.FishPondResponseDto;
 import com.kfarms.dto.StockAdjustmentRequestDto;
 import com.kfarms.entity.ApiResponse;
 import com.kfarms.service.FishPondService;
+import com.kfarms.tenant.entity.TenantPlan;
+import com.kfarms.tenant.service.TenantPlanGuardService;
 import jakarta.validation.Valid;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
@@ -23,8 +25,11 @@ import java.util.Map;
 public class FishPondController {
 
     private final FishPondService service;
-    public FishPondController(FishPondService service){
+    private final TenantPlanGuardService tenantPlanGuardService;
+
+    public FishPondController(FishPondService service, TenantPlanGuardService tenantPlanGuardService){
         this.service = service;
+        this.tenantPlanGuardService = tenantPlanGuardService;
     }
 
     // CREATE - add a new fishPond
@@ -54,6 +59,12 @@ public class FishPondController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate lastWaterChange,
             @RequestParam(required = false, defaultValue = "false") Boolean deleted
             ){
+        if (Boolean.TRUE.equals(deleted)) {
+            tenantPlanGuardService.requireCurrentTenantPlanAccess(
+                    TenantPlan.PRO,
+                    "Trash restore is available on the Pro plan."
+            );
+        }
         Map<String, Object> response = service.getAll(page, size, pondName, pondType, status, lastWaterChange, deleted);
         return ResponseEntity.ok(
                 new ApiResponse<>(true, "All FishPond fetched successfully", response)
@@ -63,7 +74,7 @@ public class FishPondController {
     // READ - get existing fishPond by ID
     @GetMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER') or hasRole('STAFF')")
-    public ResponseEntity<ApiResponse<FishPondResponseDto>> getById(@PathVariable Long id){
+    public ResponseEntity<ApiResponse<FishPondResponseDto>> getById(@PathVariable Long id) {
         FishPondResponseDto dto = service.getById(id);
         if(dto != null){
             return ResponseEntity.ok(
@@ -104,6 +115,10 @@ public class FishPondController {
     @DeleteMapping("/{id}/permanent")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<String>> permanentDelete(@PathVariable Long id) {
+        tenantPlanGuardService.requireCurrentTenantPlanAccess(
+                TenantPlan.PRO,
+                "Trash restore is available on the Pro plan."
+        );
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String deletedBy = auth != null ? auth.getName() : "SYSTEM";
         service.permanentDelete(id, deletedBy);
@@ -116,6 +131,10 @@ public class FishPondController {
     @PutMapping("/{id}/restore")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<String>> restore(@PathVariable Long id) {
+        tenantPlanGuardService.requireCurrentTenantPlanAccess(
+                TenantPlan.PRO,
+                "Trash restore is available on the Pro plan."
+        );
         service.restore(id);
         return ResponseEntity.ok(
                 new ApiResponse<>(true, "Record restored", null)

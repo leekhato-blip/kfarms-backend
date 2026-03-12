@@ -7,6 +7,7 @@ import com.kfarms.repository.*;
 import com.kfarms.service.DashboardService;
 import com.kfarms.service.EggProductionService;
 import com.kfarms.service.NotificationService;
+import com.kfarms.tenant.service.TenantContext;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,6 +40,7 @@ public class DashboardServiceImpl implements DashboardService {
     @Override
     public DashboardSummaryDto getSummary() {
         DashboardSummaryDto summary = new DashboardSummaryDto();
+        Long tenantId = TenantContext.getTenantId();
 
         LocalDate now = LocalDate.now();
         int month = now.getMonthValue();
@@ -46,9 +48,7 @@ public class DashboardServiceImpl implements DashboardService {
 
         // ================= LIVESTOCK =================
         try {
-            List<Livestock> livestockList = livestockRepo.findAll().stream()
-                    .filter(l -> !Boolean.TRUE.equals(l.getDeleted()))
-                    .toList();
+            List<Livestock> livestockList = livestockRepo.findAllActive(tenantId);
 
             int totalLivestockCount = livestockList.stream()
                     .mapToInt(l -> l.getCurrentStock() != null ? l.getCurrentStock() : 0)
@@ -63,9 +63,7 @@ public class DashboardServiceImpl implements DashboardService {
         int totalFishStock = 0;
         int totalPondCount = 0;
         try {
-            List<FishPond> ponds = fishPondRepo.findAll().stream()
-                    .filter(p -> !Boolean.TRUE.equals(p.getDeleted()))
-                    .toList();
+            List<FishPond> ponds = fishPondRepo.findAllActiveByTenantId(tenantId);
 
             totalPondCount = ponds.size();
             summary.setTotalPondCount(totalPondCount);
@@ -83,13 +81,10 @@ public class DashboardServiceImpl implements DashboardService {
         // ================= FEED =================
         int totalFeedQuantity = 0;
         try {
-            List<Feed> feeds = feedRepo.findAll().stream()
-                    .filter(f -> !Boolean.TRUE.equals(f.getDeleted()))
-                    .toList();
+            List<Feed> feeds = feedRepo.findAllActiveByTenantId(tenantId);
             summary.setTotalFeeds(feeds.size());
 
-            totalFeedQuantity = inventoryRepo.findAll().stream()
-                    .filter(i -> !Boolean.TRUE.equals(i.getDeleted()))
+            totalFeedQuantity = inventoryRepo.findAllActiveByTenantId(tenantId).stream()
                     .filter(i -> i.getCategory() == InventoryCategory.FEED)
                     .mapToInt(i -> i.getQuantity() != null ? i.getQuantity() : 0)
                     .sum();
@@ -125,9 +120,7 @@ public class DashboardServiceImpl implements DashboardService {
 
         // ================= EGGS =================
         try {
-            List<EggProduction> eggs = eggRepo.findAll().stream()
-                    .filter(e -> !Boolean.TRUE.equals(e.getDeleted()))
-                    .toList();
+            List<EggProduction> eggs = eggRepo.findAllActiveVisibleToTenant(tenantId);
 
             Map<String, Object> eggSummary = null;
             try {
@@ -168,7 +161,7 @@ public class DashboardServiceImpl implements DashboardService {
                     .filter(e -> e.getCollectionDate() != null)
                     .filter(e -> e.getCollectionDate().getMonthValue() == month &&
                             e.getCollectionDate().getYear() == year)
-                    .mapToInt(e -> (e.getCratesProduced() != 0 ? e.getCratesProduced() : 0) * 30)
+                    .mapToInt(e -> e.getGoodEggs() != 0 ? e.getGoodEggs() : 0)
                     .sum();
             summary.setTotalEggsProducedThisMonth(totalEggsProducedThisMonth);
 
@@ -183,9 +176,7 @@ public class DashboardServiceImpl implements DashboardService {
 
         // ================= SALES =================
         try {
-            List<Sales> sales = salesRepo.findAll().stream()
-                    .filter(s -> !Boolean.TRUE.equals(s.getDeleted()))
-                    .toList();
+            List<Sales> sales = salesRepo.findAllActiveByTenantId(tenantId);
 
             BigDecimal totalRevenue = sales.stream()
                     .map(s -> s.getTotalPrice() != null ? s.getTotalPrice() : BigDecimal.ZERO)
@@ -208,12 +199,10 @@ public class DashboardServiceImpl implements DashboardService {
         // ================= EXPENSES =================
         BigDecimal totalExpensesThisMonth = BigDecimal.ZERO;
         try {
-            List<Supplies> supplies = suppliesRepo.findAll().stream()
-                    .filter(s -> !Boolean.TRUE.equals(s.getDeleted()))
-                    .toList();
+            List<Supplies> supplies = suppliesRepo.findAllActiveByTenantId(tenantId);
 
             BigDecimal totalExpenses = supplies.stream()
-                    .map(s -> s.getUnitPrice() != null ? s.getUnitPrice() : BigDecimal.ZERO)
+                    .map(s -> s.getTotalPrice() != null ? s.getTotalPrice() : BigDecimal.ZERO)
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
             summary.setTotalExpenses(totalExpenses);
 
@@ -221,7 +210,7 @@ public class DashboardServiceImpl implements DashboardService {
                     .filter(s -> s.getSupplyDate() != null)
                     .filter(s -> s.getSupplyDate().getMonthValue() == month &&
                             s.getSupplyDate().getYear() == year)
-                    .map(s -> s.getUnitPrice() != null ? s.getUnitPrice() : BigDecimal.ZERO)
+                    .map(s -> s.getTotalPrice() != null ? s.getTotalPrice() : BigDecimal.ZERO)
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
             summary.setTotalExpensesThisMonth(totalExpensesThisMonth);
         } catch (Exception e) {

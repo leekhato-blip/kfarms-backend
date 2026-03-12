@@ -1,5 +1,6 @@
 package com.kfarms.health.entity;
 
+import com.kfarms.tenant.entity.Tenant;
 import com.kfarms.health.enums.HealthEventStatus;
 import com.kfarms.health.enums.HealthSeverity;
 import jakarta.persistence.*;
@@ -18,6 +19,10 @@ public class HealthEvent {
 
     @ManyToOne(optional = false)
     private HealthRule rule;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "tenant_id")
+    private Tenant tenant;
 
     @Enumerated(EnumType.STRING)
     private HealthEventStatus status = HealthEventStatus.NEW;

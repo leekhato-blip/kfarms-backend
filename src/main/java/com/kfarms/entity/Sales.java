@@ -1,6 +1,7 @@
 package com.kfarms.entity;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.kfarms.tenant.entity.Tenant;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -39,5 +40,9 @@ public class Sales extends Auditable {
 
     @JsonFormat(pattern = "yyyy-MM-dd")
     private LocalDate salesDate = LocalDate.now(); // default today
+
+    @ManyToOne(optional = false)
+    @JoinColumn(name = "tenant_id", nullable = false)
+    private Tenant tenant;
 
 }

@@ -2,9 +2,12 @@ package com.kfarms.health.service;
 
 import com.kfarms.health.dto.WeatherData;
 import com.kfarms.health.enums.FarmSeason;
+import com.kfarms.tenant.entity.Tenant;
+import com.kfarms.tenant.repository.TenantRepository;
 import com.kfarms.repository.FishPondRepository;
 import com.kfarms.repository.LivestockRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -14,6 +17,7 @@ import java.util.Map;
 
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class HealthScheduler {
 
     private final WeatherService weatherService;
@@ -21,6 +25,7 @@ public class HealthScheduler {
 
     private final FishPondRepository fishPondRepo;
     private final LivestockRepository livestockRepo;
+    private final TenantRepository tenantRepository;
 
     private final Map<String, Double> heatThresholds = Map.of(
             "HEAT_STRESS_POULTRY", 35.0
@@ -51,12 +56,19 @@ public class HealthScheduler {
                         temp, season, humidity
                 );
 
-                System.out.println("About to call triggerRuleByCode " + context);
-                healthService.triggerRuleByCode(
-                        entry.getKey(),
-                        context,
-                        season.name()
-                );
+                tenantRepository.findAll().forEach(tenant -> {
+                    if (Boolean.TRUE.equals(tenant.getDeleted())) {
+                        return;
+                    }
+
+                    healthService.triggerRuleByCode(
+                            entry.getKey(),
+                            context,
+                            season.name(),
+                            "weather:" + farmCity.toLowerCase(),
+                            tenant
+                    );
+                });
             }
         }
 
@@ -107,11 +119,21 @@ public class HealthScheduler {
                         total,
                         rate * 100
                 );
+                Tenant tenant = pond.getTenant();
+                if (tenant == null || tenant.getId() == null || Boolean.TRUE.equals(tenant.getDeleted())) {
+                    log.warn(
+                            "Skipping fish mortality alert for pond {} because tenant context is missing.",
+                            pond.getId()
+                    );
+                    return;
+                }
 
                 healthService.triggerRuleByCode(
                         "UNUSUAL_MORTALITY_FISH",
                         context,
-                        detectSeason(LocalDate.now()).name()
+                        detectSeason(LocalDate.now()).name(),
+                        "pond:" + pond.getId(),
+                        tenant
                 );
             }
         });
@@ -142,14 +164,14 @@ public class HealthScheduler {
                         rate * 100
                 );
 
-                String sourceKey =
-                        batch.getType() + "-" + batch.getBatchName();
-
-
-                healthService.triggerRuleByCode(
-                        "UNUSUAL_MORTALITY_POULTRY",
-                        context,
-                        detectSeason(LocalDate.now()).name()
+                tenantRepository.findById(batch.getTenantId()).ifPresent(tenant ->
+                        healthService.triggerRuleByCode(
+                                "UNUSUAL_MORTALITY_POULTRY",
+                                context,
+                                detectSeason(LocalDate.now()).name(),
+                                "livestock:" + batch.getId(),
+                                tenant
+                        )
                 );
             }
         });

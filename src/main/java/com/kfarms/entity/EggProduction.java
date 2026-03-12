@@ -1,6 +1,7 @@
 package com.kfarms.entity;
 
 import com.kfarms.mapper.LivestockMapper;
+import com.kfarms.tenant.entity.Tenant;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
@@ -38,6 +39,10 @@ public class EggProduction extends Auditable {
     private int cratesProduced = 0; // optional derived field (e.g., goodEggs / 30)
 
     private String note;
+
+    @ManyToOne(optional = false)
+    @JoinColumn(name = "tenant_id", nullable = false)
+    private Tenant tenant;
 
     public void calculateCrates() {
         if (goodEggs > 0) {

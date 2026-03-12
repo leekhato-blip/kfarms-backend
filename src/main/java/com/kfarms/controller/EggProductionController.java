@@ -4,6 +4,8 @@ import com.kfarms.dto.EggProductionRequestDto;
 import com.kfarms.dto.EggProductionResponseDto;
 import com.kfarms.entity.ApiResponse;
 import com.kfarms.service.EggProductionService;
+import com.kfarms.tenant.entity.TenantPlan;
+import com.kfarms.tenant.service.TenantPlanGuardService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -14,7 +16,6 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
-import java.security.PublicKey;
 import java.time.LocalDate;
 import java.util.Map;
 
@@ -24,6 +25,7 @@ import java.util.Map;
 @Validated
 public class EggProductionController {
     private final EggProductionService eggService;
+    private final TenantPlanGuardService tenantPlanGuardService;
 
     // CREATE
     @PostMapping
@@ -43,9 +45,16 @@ public class EggProductionController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(required = false) Long livestockId,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)LocalDate collectionDate
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate collectionDate,
+            @RequestParam(required = false, defaultValue = "false") Boolean deleted
             ) {
-        Map<String, Object> response = eggService.getAll(page, size, livestockId, collectionDate);
+        if (Boolean.TRUE.equals(deleted)) {
+            tenantPlanGuardService.requireCurrentTenantPlanAccess(
+                    TenantPlan.PRO,
+                    "Trash restore is available on the Pro plan."
+            );
+        }
+        Map<String, Object> response = eggService.getAll(page, size, livestockId, collectionDate, deleted);
         return ResponseEntity.ok(
                 new ApiResponse<>(true, "all egg records fetched successfully", response)
         );
@@ -89,10 +98,29 @@ public class EggProductionController {
         );
     }
 
+    @DeleteMapping("/{id}/permanent")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<String>> permanentDelete(@PathVariable Long id) {
+        tenantPlanGuardService.requireCurrentTenantPlanAccess(
+                TenantPlan.PRO,
+                "Trash restore is available on the Pro plan."
+        );
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String deletedBy = auth != null ? auth.getName() : "SYSTEM";
+        eggService.permanentDelete(id, deletedBy);
+        return ResponseEntity.ok(
+                new ApiResponse<>(true, "Egg record deleted permanently", null)
+        );
+    }
+
     // RESTORE
     @PutMapping("/{id}/restore")
     @PreAuthorize("hasRole('ADMIN')")
     public  ResponseEntity<ApiResponse<String>> restore(@PathVariable Long id) {
+        tenantPlanGuardService.requireCurrentTenantPlanAccess(
+                TenantPlan.PRO,
+                "Trash restore is available on the Pro plan."
+        );
         eggService.restore(id);
         return ResponseEntity.ok(
                 new ApiResponse<>(true, "Record restored", null)

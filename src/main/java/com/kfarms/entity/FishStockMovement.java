@@ -1,5 +1,6 @@
 package com.kfarms.entity;
 
+import com.kfarms.tenant.entity.Tenant;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -35,4 +36,8 @@ public class FishStockMovement extends Auditable{
 
     @Column(nullable = false)
     private LocalDateTime movementAt;
+
+    @ManyToOne(optional = false)
+    @JoinColumn(name = "tenant_id", nullable = false)
+    private Tenant tenant;
 }

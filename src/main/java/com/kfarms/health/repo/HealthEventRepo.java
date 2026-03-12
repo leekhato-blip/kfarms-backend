@@ -9,36 +9,43 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 
 public interface HealthEventRepo extends JpaRepository<HealthEvent, Long> {
 
-    boolean existsByRuleAndStatusAndSourceKey(
+    boolean existsByTenant_IdAndRuleAndStatusInAndSourceKeyIgnoreCase(
+            Long tenantId,
             HealthRule rule,
-            HealthEventStatus status,
+            Collection<HealthEventStatus> statuses,
             String sourceKey
     );
 
-    boolean existsByRuleAndTriggeredAtAfter(
+    boolean existsByTenant_IdAndRuleAndSourceKeyIgnoreCaseAndTriggeredAtAfter(
+            Long tenantId,
             HealthRule rule,
+            String sourceKey,
             LocalDateTime after
     );
 
-    List<HealthEvent> findByRuleAndStatus(
-            HealthRule rule,
-            HealthEventStatus status
+    List<HealthEvent> findByTenant_IdAndStatusInOrderByTriggeredAtDesc(
+            Long tenantId,
+            Collection<HealthEventStatus> statuses
     );
 
-    boolean existsByRuleAndStatus(
-            HealthRule rule, HealthEventStatus status
-    );
+    Optional<HealthEvent> findByIdAndTenant_Id(Long id, Long tenantId);
 
     @Query("""
     select e from HealthEvent e
-    where lower(e.sourceKey) like lower(concat('%', :q, '%'))
-    or lower(e.contextNote) like lower(concat('%', :q, '%'))
+    where e.tenant.id = :tenantId
+    and (
+        lower(coalesce(e.sourceKey, '')) like lower(concat('%', :q, '%'))
+        or lower(coalesce(e.contextNote, '')) like lower(concat('%', :q, '%'))
+        or lower(e.rule.title) like lower(concat('%', :q, '%'))
+    )
     order by e.triggeredAt desc
     """)
-    List<HealthEvent> search(@Param("q") String q, Pageable pageable);
+    List<HealthEvent> search(@Param("tenantId") Long tenantId, @Param("q") String q, Pageable pageable);
 
 }

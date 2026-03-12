@@ -3,6 +3,8 @@ package com.kfarms.reports;
 
 
 import com.kfarms.entity.ApiResponse;
+import com.kfarms.tenant.entity.TenantPlan;
+import com.kfarms.tenant.service.TenantPlanGuardService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.InputStreamSource;
@@ -24,6 +26,7 @@ import java.util.List;
 public class ReportController {
 
     private final ReportService reportService;
+    private final TenantPlanGuardService planGuardService;
 
     // --------------------------------------
     // Monthly Summary
@@ -32,6 +35,7 @@ public class ReportController {
     public ResponseEntity<ApiResponse<MonthlySummaryDto>> getMonthlyReport(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate month
     ){
+        requireAdvancedAnalyticsAccess();
         MonthlySummaryDto summary = reportService.getMonthlySummary(month);
         return ResponseEntity.ok(
                 new ApiResponse<>(true, "Monthly summary fetched", summary)
@@ -46,6 +50,7 @@ public class ReportController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate
     ){
+        requireAdvancedAnalyticsAccess();
         MonthlySummaryDto summary = reportService.getRangeSummary(startDate, endDate);
         return ResponseEntity.ok(
                 new ApiResponse<>(true, "Range summary fetched", summary)
@@ -63,6 +68,7 @@ public class ReportController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
             @RequestParam(defaultValue = "daily") String interval
     ) {
+        requireAdvancedAnalyticsAccess();
         List<TrendPointDto> data = reportService.getTrends(metric, startDate, endDate, interval);
         return ResponseEntity.ok(
                 new ApiResponse<>(true, "Trend data fetched", data)
@@ -79,6 +85,7 @@ public class ReportController {
             @RequestParam(required = false) LocalDate start,
             @RequestParam(required = false) LocalDate end
     ){
+     requireAdvancedAnalyticsAccess();
      ExportResponseMeta meta = reportService.validateExportParams(type, category, start, end);
      InputStreamSource resource = reportService.generateExport(type, category, start, end);
 
@@ -86,6 +93,13 @@ public class ReportController {
              .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + meta.getFilename())
              .contentType(MediaType.parseMediaType(meta.getContentType()))
              .body(resource);
+    }
+
+    private void requireAdvancedAnalyticsAccess() {
+        planGuardService.requireCurrentTenantPlanAccess(
+                TenantPlan.PRO,
+                "Advanced analytics and exports are available on Pro and Enterprise plans."
+        );
     }
 
 }

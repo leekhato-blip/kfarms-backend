@@ -3,6 +3,7 @@ package com.kfarms.service.impl;
 import com.kfarms.repository.SalesRepository;
 import com.kfarms.repository.SuppliesRepository;
 import com.kfarms.service.FinanceService;
+import com.kfarms.tenant.service.TenantContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -20,9 +21,13 @@ public class FinanceServiceImpl implements FinanceService {
 
     @Override
     public Map<String, Object> getMonthlyFinance() {
+        Long tenantId = TenantContext.getTenantId();
+        if (tenantId == null) {
+            throw new IllegalStateException("Missing tenant context");
+        }
         int year = LocalDate.now().getYear();
-        List<Object[]> revenueRaw = salesRepo.getMonthlyRevenue(year);
-        List<Object[]> expenseRaw = suppliesRepo.getMonthlyExpenses(year);
+        List<Object[]> revenueRaw = salesRepo.getMonthlyRevenue(tenantId, year);
+        List<Object[]> expenseRaw = suppliesRepo.getMonthlyExpenses(tenantId, year);
 
         Map<String, BigDecimal> revenueMap = new LinkedHashMap<>();
         Map<String, BigDecimal> expenseMap = new LinkedHashMap<>();
@@ -62,4 +67,3 @@ public class FinanceServiceImpl implements FinanceService {
         return response;
     }
 }
-

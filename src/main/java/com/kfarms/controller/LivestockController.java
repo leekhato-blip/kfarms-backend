@@ -6,6 +6,8 @@ import com.kfarms.dto.LivestockResponseDto;
 import com.kfarms.dto.StockAdjustmentRequestDto;
 import com.kfarms.entity.ApiResponse;
 import com.kfarms.service.LivestockService;
+import com.kfarms.tenant.entity.TenantPlan;
+import com.kfarms.tenant.service.TenantPlanGuardService;
 import jakarta.validation.Valid;
 import lombok.AllArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -27,6 +29,7 @@ import java.util.Map;
 @Validated
 public class LivestockController {
     private final LivestockService service;
+    private final TenantPlanGuardService tenantPlanGuardService;
 
     // CREATE - add new livestock
     @PreAuthorize("hasRole('ADMIN')")
@@ -55,6 +58,12 @@ public class LivestockController {
         @RequestParam(required = false, defaultValue = "false") Boolean deleted
 
     ){
+        if (Boolean.TRUE.equals(deleted)) {
+            tenantPlanGuardService.requireCurrentTenantPlanAccess(
+                    TenantPlan.PRO,
+                    "Trash restore is available on the Pro plan."
+            );
+        }
         Map<String, Object> response = service.getAll(page, size, batchName, type, arrivalDate, deleted);
         return ResponseEntity.ok(
                 new ApiResponse<>(true, "Livestock fetched successfully", response)
@@ -120,6 +129,10 @@ public class LivestockController {
     @DeleteMapping("/{id}/permanent")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<String>> permanentDelete(@PathVariable Long id) {
+        tenantPlanGuardService.requireCurrentTenantPlanAccess(
+                TenantPlan.PRO,
+                "Trash restore is available on the Pro plan."
+        );
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String deletedBy = auth != null ? auth.getName() : "SYSTEM";
         service.permanentDelete(id, deletedBy);
@@ -132,6 +145,10 @@ public class LivestockController {
     @PutMapping("/{id}/restore")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse> restore(@PathVariable Long id) {
+        tenantPlanGuardService.requireCurrentTenantPlanAccess(
+                TenantPlan.PRO,
+                "Trash restore is available on the Pro plan."
+        );
         service.restore(id);
         return ResponseEntity.ok(
                 new ApiResponse(true, "Livestock record restored", null)

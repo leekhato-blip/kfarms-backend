@@ -50,6 +50,15 @@ public interface LivestockRepository extends JpaRepository<Livestock, Long>, Jpa
     List<Livestock> searchByNameOrBatch(@Param("tenantId") Long tenantId,
                                         @Param("q") String q,
                                         Pageable pageable);
-}
 
+    long countByTenantId(Long tenantId);
+
+    @Query("""
+    select count(l) from Livestock l
+    where l.tenantId = :tenantId
+      and (l.deleted = false or l.deleted is null)
+    """)
+    long countActiveByTenantId(@Param("tenantId") Long tenantId);
+
+}
 

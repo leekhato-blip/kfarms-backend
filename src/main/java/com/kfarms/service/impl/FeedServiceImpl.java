@@ -4,13 +4,17 @@ import com.kfarms.dto.FeedRequestDto;
 import com.kfarms.dto.FeedResponseDto;
 import com.kfarms.entity.Feed;
 import com.kfarms.entity.FeedBatchType;
+import com.kfarms.entity.Inventory;
 import com.kfarms.entity.InventoryCategory;
 import com.kfarms.exceptions.ResourceNotFoundException;
 import com.kfarms.mapper.FeedMapper;
 import com.kfarms.repository.FeedRepository;
+import com.kfarms.repository.InventoryRepository;
 import com.kfarms.service.FeedService;
 import com.kfarms.service.InventoryService;
-import com.kfarms.service.NotificationService;
+import com.kfarms.tenant.entity.Tenant;
+import com.kfarms.tenant.repository.TenantRepository;
+import com.kfarms.tenant.service.TenantContext;
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -19,68 +23,91 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class FeedServiceImpl implements FeedService {
+
+    private static final long DEFAULT_BATCH_ID = 0L;
+    private static final List<String> FEED_CATEGORY_KEYS = List.of(
+            "starter",
+            "grower",
+            "finisher",
+            "layer",
+            "broiler",
+            "noiler",
+            "duck",
+            "fish",
+            "turkey",
+            "fowl",
+            "other"
+    );
+
     private final FeedRepository repo;
+    private final InventoryRepository inventoryRepo;
     private final InventoryService inventoryService;
-    private final NotificationService notification;
+    private final TenantRepository tenantRepository;
 
-
-    // CREATE - add new feed
     @Override
-    public FeedResponseDto create(FeedRequestDto dto) {
-        Feed entity = FeedMapper.toEntity(dto);
-        Feed saved = repo.save(entity);
+    @Transactional
+    public FeedResponseDto create(FeedRequestDto request) {
+        Long tenantId = requireTenantId();
 
-        // auto update inventory after create
-        inventoryService.adjustStock(
-                saved.getFeedName(),
-                InventoryCategory.FEED,
-                -saved.getQuantityUsed(),
-                "kg",
-                "Consumed by batch" + saved.getBatchId()
-        );
+        Feed entity = new Feed();
+        entity.setTenant(resolveTenant(tenantId));
+        applyRequest(entity, request);
+
+        Feed saved = repo.save(entity);
+        consumeInventoryIfTracked(saved, saved.getQuantityUsed(), "Feed logged");
         return FeedMapper.toResponseDto(saved);
     }
 
-    // READ - get all with filtering & pagination
     @Override
-    public Map<String, Object> getAll(int page, int size, String batchType, LocalDate date) {
-        Pageable pageable = PageRequest.of(page, size, Sort.by("id").descending());
+    public Map<String, Object> getAll(int page, int size, String batchType, LocalDate date, Boolean deleted) {
+        Long tenantId = requireTenantId();
+        FeedBatchType batchTypeEnum = parseBatchType(batchType);
 
+        Sort sort = Boolean.TRUE.equals(deleted)
+                ? Sort.by(Sort.Direction.DESC, "deletedAt").and(Sort.by(Sort.Direction.DESC, "id"))
+                : Sort.by(Sort.Direction.DESC, "id");
 
-        // Convert batchType string to enum (case-insensitive)
-        FeedBatchType batchTypeEnum = null;
-        if (batchType != null && !batchType.isBlank()) {
-            try {
-                batchTypeEnum = FeedBatchType.valueOf(batchType.trim().toUpperCase());
-            } catch (IllegalArgumentException ex) {
-                throw new IllegalArgumentException(
-                        "Invalid batchType: '" + batchType + "' . Allowed values: "
-                        + Arrays.toString(FeedBatchType.values())
-                );
-            }
-        }
-
-        final FeedBatchType batchTypeEnumFinal = batchTypeEnum;
+        Pageable pageable = PageRequest.of(page, size, sort);
 
         Specification<Feed> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
+            predicates.add(cb.equal(root.get("tenant").get("id"), tenantId));
 
-            if (batchTypeEnumFinal != null) {
-                predicates.add(cb.equal(root.get("batchType"), batchTypeEnumFinal));
+            if (Boolean.TRUE.equals(deleted)) {
+                predicates.add(cb.isTrue(root.get("deleted")));
+            } else {
+                predicates.add(cb.or(
+                        cb.isNull(root.get("deleted")),
+                        cb.isFalse(root.get("deleted"))
+                ));
             }
+
+            if (batchTypeEnum != null) {
+                predicates.add(cb.equal(root.get("batchType"), batchTypeEnum));
+            }
+
             if (date != null) {
                 predicates.add(cb.equal(root.get("date"), date));
             }
-            
+
             return cb.and(predicates.toArray(new Predicate[0]));
         };
 
@@ -89,7 +116,7 @@ public class FeedServiceImpl implements FeedService {
                 .map(FeedMapper::toResponseDto)
                 .toList();
 
-        Map<String, Object> result = new HashMap<>();
+        Map<String, Object> result = new LinkedHashMap<>();
         result.put("items", items);
         result.put("page", feedPage.getNumber());
         result.put("size", feedPage.getSize());
@@ -97,368 +124,567 @@ public class FeedServiceImpl implements FeedService {
         result.put("totalPages", feedPage.getTotalPages());
         result.put("hasNext", feedPage.hasNext());
         result.put("hasPrevious", feedPage.hasPrevious());
-
         return result;
     }
 
-    // READ - get by ID
     @Override
     public FeedResponseDto getById(Long id) {
-        Feed entity = repo.findById(id)
-                .filter(f -> !Boolean.TRUE.equals(f.getDeleted()))
-                .orElseThrow(() -> new ResourceNotFoundException("Feed", "id", id));
+        Feed entity = getTenantFeed(id, false);
         return FeedMapper.toResponseDto(entity);
     }
 
-    // UPDATE - update existing Feed by ID
     @Override
+    @Transactional
     public FeedResponseDto update(Long id, FeedRequestDto request, String updatedBy) {
-        Feed entity = repo.findById(id)
-                .filter(f -> !Boolean.TRUE.equals(f.getDeleted()))
-                .orElseThrow(() -> new ResourceNotFoundException("Feed", "id", id));
+        Feed entity = getTenantFeed(id, false);
+        FeedSnapshot previous = FeedSnapshot.from(entity);
 
-        // update fields from request
-        entity.setBatchType(FeedBatchType.valueOf(request.getBatchType().toUpperCase()));
-        entity.setFeedName(request.getFeedName());
-        entity.setBatchId(request.getBatchId());
-        entity.setNote(request.getNote());
-        entity.setQuantityUsed(request.getQuantityUsed());
+        applyRequest(entity, request);
         entity.setUpdatedBy(updatedBy);
 
-        repo.save(entity);
-        return FeedMapper.toResponseDto(entity);
+        reconcileInventory(previous, entity);
+        Feed saved = repo.save(entity);
+        return FeedMapper.toResponseDto(saved);
     }
 
-    // DELETE - delete by ID
     @Override
+    @Transactional
     public void delete(Long id, String deletedBy) {
-        Feed entity = repo.findById(id)
-                        .orElseThrow(() -> new ResourceNotFoundException("Feed", "id", id));
-
+        Feed entity = getTenantFeed(id, true);
         if (Boolean.TRUE.equals(entity.getDeleted())) {
             throw new IllegalArgumentException("Feed record with ID " + id + " has already been deleted");
         }
+
+        refundInventoryIfTracked(entity, "Feed record deleted");
         entity.setDeleted(true);
         entity.setDeletedAt(LocalDateTime.now());
         entity.setUpdatedBy(deletedBy);
         repo.save(entity);
     }
 
-    // RESTORE
     @Override
+    @Transactional
+    public void permanentDelete(Long id, String deletedBy) {
+        Long tenantId = requireTenantId();
+        Feed entity = getTenantFeed(id, true);
+        if (!Boolean.TRUE.equals(entity.getDeleted())) {
+            throw new IllegalArgumentException("Feed record with ID " + id + " must be moved to trash before permanent delete");
+        }
+
+        int deletedCount = repo.hardDeleteByIdAndTenantId(entity.getId(), tenantId);
+        if (deletedCount == 0) {
+            throw new ResourceNotFoundException("Feed", "id", id);
+        }
+    }
+
+    @Override
+    @Transactional
     public void restore(Long id) {
-        Feed entity = repo.findById(id)
+        Long tenantId = requireTenantId();
+        Feed entity = repo.findByIdAndTenant_Id(id, tenantId)
                 .orElseThrow(() -> new ResourceNotFoundException("Feed", "id", id));
 
         if (!Boolean.TRUE.equals(entity.getDeleted())) {
-            throw new IllegalArgumentException("Feed with ID " + id + " has already been restored");
+            throw new IllegalArgumentException("Feed with ID " + id + " is not deleted");
         }
 
+        consumeInventoryIfTracked(entity, safeQuantity(entity.getQuantityUsed()), "Feed record restored");
         entity.setDeleted(false);
-        entity.setDeletedAt(LocalDateTime.now());
+        entity.setDeletedAt(null);
         repo.save(entity);
     }
 
-    // SUMMARY
-    // SUMMARY
     @Override
     public Map<String, Object> getSummary() {
-        List<Feed> all = repo.findAll()
-                .stream()
-                .filter(f -> !Boolean.TRUE.equals(f.getDeleted()))
+        Long tenantId = requireTenantId();
+
+        List<Feed> allFeeds = repo.findAll().stream()
+                .filter(feed -> belongsToTenant(feed, tenantId))
+                .filter(feed -> !Boolean.TRUE.equals(feed.getDeleted()))
                 .toList();
 
-        Map<String, Object> summary = new HashMap<>();
+        List<Inventory> feedInventory = inventoryRepo.findAll().stream()
+                .filter(item -> belongsToTenant(item, tenantId))
+                .filter(item -> !Boolean.TRUE.equals(item.getDeleted()))
+                .filter(item -> item.getCategory() == InventoryCategory.FEED)
+                .toList();
 
-        // -----------------------------
-        // Existing summary fields
-        // -----------------------------
+        Map<String, Object> summary = new LinkedHashMap<>();
+        LocalDate today = LocalDate.now();
 
-        summary.put("totalFeeds", all.size());
-
-        int totalQuantityUsed = all.stream()
-                .mapToInt(f -> f.getQuantityUsed() != null ? f.getQuantityUsed() : 0)
+        int totalQuantityUsed = allFeeds.stream()
+                .mapToInt(feed -> safeQuantity(feed.getQuantityUsed()))
                 .sum();
-        summary.put("totalQuantityUsed", totalQuantityUsed);
+        int usedThisMonth = allFeeds.stream()
+                .filter(feed -> isSameMonth(feed.getDate(), today))
+                .mapToInt(feed -> safeQuantity(feed.getQuantityUsed()))
+                .sum();
 
-        Map<String, Long> countByType = all.stream()
-                .collect(Collectors.groupingBy(f -> f.getBatchType().name(), Collectors.counting()));
-        summary.put("countByType", countByType);
+        BigDecimal monthlySpend = allFeeds.stream()
+                .filter(feed -> isSameMonth(feed.getDate(), today))
+                .map(this::calculateTotalCost)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        Map<String, Integer> quantityByType = all.stream()
+        Map<String, Integer> usageByCategory = buildCategoryTotalsFromFeeds(allFeeds);
+        Map<String, Integer> stockByCategory = buildCategoryTotalsFromInventory(feedInventory);
+        if (stockByCategory.values().stream().mapToInt(Integer::intValue).sum() == 0) {
+            stockByCategory = usageByCategory;
+        }
+
+        List<Map<String, Object>> topFeedsByUsage = allFeeds.stream()
                 .collect(Collectors.groupingBy(
-                        f -> f.getBatchType().name(),
-                        Collectors.summingInt(f -> f.getQuantityUsed() != null ? f.getQuantityUsed() : 0)
+                        this::resolveFeedDisplayName,
+                        LinkedHashMap::new,
+                        Collectors.summingInt(feed -> safeQuantity(feed.getQuantityUsed()))
+                ))
+                .entrySet().stream()
+                .sorted((a, b) -> Integer.compare(b.getValue(), a.getValue()))
+                .limit(6)
+                .map(entry -> mapOf(
+                        "label", entry.getKey(),
+                        "value", entry.getValue()
+                ))
+                .toList();
+
+        List<Map<String, Object>> recentFeedTransactions = allFeeds.stream()
+                .sorted(Comparator
+                        .comparing(FeedServiceImpl::effectiveDateTime, Comparator.nullsLast(Comparator.reverseOrder()))
+                        .thenComparing(Feed::getId, Comparator.nullsLast(Comparator.reverseOrder())))
+                .limit(10)
+                .map(feed -> mapOf(
+                        "id", feed.getId(),
+                        "type", feed.getBatchType() != null ? feed.getBatchType().name() : "UNKNOWN",
+                        "batchType", feed.getBatchType() != null ? feed.getBatchType().name() : "UNKNOWN",
+                        "feedName", resolveFeedDisplayName(feed),
+                        "itemName", resolveFeedDisplayName(feed),
+                        "quantity", safeQuantity(feed.getQuantityUsed()),
+                        "quantityUsed", safeQuantity(feed.getQuantityUsed()),
+                        "unitCost", feed.getUnitCost(),
+                        "date", feed.getDate() != null ? feed.getDate() : feed.getCreatedAt()
+                ))
+                .toList();
+
+        Map<String, Integer> countByType = allFeeds.stream()
+                .collect(Collectors.groupingBy(
+                        feed -> feed.getBatchType() != null ? feed.getBatchType().name() : "UNKNOWN",
+                        LinkedHashMap::new,
+                        Collectors.summingInt(feed -> 1)
                 ));
 
-        int grandTotal = quantityByType.values().stream().mapToInt(Integer::intValue).sum();
-        List<Map<String, Object>> breakdown = new ArrayList<>();
-
-        if (grandTotal > 0) {
-            quantityByType.forEach((type, qty) -> {
-                double percentage = (qty * 100.0) / grandTotal;
-
-                String label;
-                switch (type) {
-                    case "LAYERS": label = "Poultry"; break;
-                    case "FISH": label = "Fish"; break;
-                    case "DUCKS": label = "Ducks"; break;
-                    default: label = "others";
-                }
-
-                Map<String, Object> entry = new HashMap<>();
-                entry.put("label", label);
-                entry.put("value", Math.round(percentage));
-                breakdown.add(entry);
-            });
-        }
-        summary.put("feedBreakdown", breakdown);
-
-        int usedThisMonth = all.stream()
-                .filter(f -> f.getDate() != null && f.getDate().getMonth().equals(LocalDate.now().getMonth())
-                        && f.getDate().getYear() == LocalDate.now().getYear())
-                .mapToInt(f -> f.getQuantityUsed() != null ? f.getQuantityUsed() : 0)
-                .sum();
-        summary.put("usedThisMonth", usedThisMonth);
-
-        all.stream()
-                .map(Feed::getCreatedAt)
+        LocalDate latestFeedDate = allFeeds.stream()
+                .map(Feed::getDate)
                 .filter(Objects::nonNull)
-                .max(LocalDateTime::compareTo)
-                .ifPresent(lastDate -> summary.put("lastFeedDate", lastDate));
+                .max(LocalDate::compareTo)
+                .orElse(null);
 
-        if (usedThisMonth > 100) {
-            notification.createNotification(
-                    "FEED",
-                    "High Feed Usage",
-                    "Feed usage for this month has exceeded 100kg",
-                    null
-            );
-        }
-
-        if (totalQuantityUsed < 100) {
-            notification.createNotification(
-                    "FEED",
-                    "Low Feed Activity",
-                    "Feed consumption appears unusually low this month",
-                    null
-            );
-        }
-
-        // -----------------------------
-        // NEW: Top feeds by usage
-        // -----------------------------
-        List<Map<String, Object>> topFeedsByUsage = all.stream()
-                .filter(f -> f.getFeedName() != null && !f.getFeedName().isBlank())
-                .collect(Collectors.groupingBy(
-                        Feed::getFeedName,
-                        Collectors.summingInt(f -> f.getQuantityUsed() != null ? f.getQuantityUsed() : 0)
-                ))
-                .entrySet()
-                .stream()
-                .sorted((a, b) -> Integer.compare(b.getValue(), a.getValue()))
-                .limit(5)
-                .map(e -> {
-                    Map<String, Object> m = new HashMap<>();
-                    m.put("label", e.getKey());
-                    m.put("value", e.getValue());
-                    return m;
-                })
-                .toList();
-        summary.put("topFeedsByUsage", topFeedsByUsage);
-
-        // -----------------------------
-        // NEW: Stock by category (starter/grower/finisher/etc)
-        // This is inferred from feedName keywords.
-        // -----------------------------
-        Map<String, Integer> stockByCategory = new LinkedHashMap<>();
-        stockByCategory.put("starter", 0);
-        stockByCategory.put("grower", 0);
-        stockByCategory.put("finisher", 0);
-        stockByCategory.put("layer", 0);
-        stockByCategory.put("broiler", 0);
-        stockByCategory.put("fish", 0);
-        stockByCategory.put("other", 0);
-
-        // NOTE: Without inventory-on-hand per item, we can only classify USED quantities from feeds table.
-        // If inventory provides real on-hand by product, we’ll overwrite this below (when available).
-        all.forEach(f -> {
-            int qty = (f.getQuantityUsed() != null ? f.getQuantityUsed() : 0);
-            String key = inferFeedCategory(f.getFeedName());
-            stockByCategory.put(key, stockByCategory.getOrDefault(key, 0) + qty);
-        });
-        summary.put("stockByCategory", stockByCategory);
-
-        // -----------------------------
-        // NEW: Recent feed transactions (from feeds table)
-        // type = batchType (since Feed currently represents consumption records)
-        // unitCost = null unless inventory transactions provide it (below)
-        // -----------------------------
-        List<Map<String, Object>> recentFeedTransactions = all.stream()
-                .sorted((a, b) -> {
-                    LocalDateTime da = a.getCreatedAt();
-                    LocalDateTime db = b.getCreatedAt();
-                    if (da == null && db == null) return 0;
-                    if (da == null) return 1;
-                    if (db == null) return -1;
-                    return db.compareTo(da);
-                })
-                .limit(10)
-                .map(f -> {
-                    Map<String, Object> tx = new HashMap<>();
-                    tx.put("id", f.getId());
-                    tx.put("type", f.getBatchType() != null ? f.getBatchType().name() : "UNKNOWN");
-                    tx.put("quantity", f.getQuantityUsed() != null ? f.getQuantityUsed() : 0);
-                    tx.put("unitCost", null); // will be enhanced if inventory transactions exist
-                    tx.put("date", f.getDate() != null ? f.getDate() : null);
-                    return tx;
-                })
-                .toList();
-        summary.put("recentFeedTransactions", recentFeedTransactions);
-
-        // -----------------------------
-        // NEW: Inventory-driven summary (safe reflection calls)
-        // If your InventoryService has these, they’ll be used:
-        //  - Map getCategorySummary(InventoryCategory category)
-        //  - List<Map> getRecentTransactions(InventoryCategory category, int limit)
-        // -----------------------------
-        Map<String, Object> invSummary = tryInvokeMap(inventoryService, "getCategorySummary",
-                new Class[]{InventoryCategory.class},
-                new Object[]{InventoryCategory.FEED}
-        );
-
-        // defaults
-        summary.put("lowStockCount", 0);
-        summary.put("reorderCount", 0);
-        summary.put("totalStockOnHand", 0);
-        summary.put("unit", "kg");
-        summary.put("avgUnitCost", 0.0);
-        summary.put("monthlySpend", 0.0);
-
-        if (invSummary != null && !invSummary.isEmpty()) {
-            summary.put("lowStockCount", asInt(invSummary.get("lowStockCount")));
-            summary.put("reorderCount", asInt(invSummary.get("reorderCount")));
-            summary.put("totalStockOnHand", asInt(invSummary.get("totalStockOnHand")));
-            summary.put("unit", invSummary.get("unit") != null ? invSummary.get("unit") : "kg");
-            summary.put("avgUnitCost", asDouble(invSummary.get("avgUnitCost")));
-
-            // If inventory already gives monthlySpend, use it, else estimate from usedThisMonth * avgUnitCost
-            Object ms = invSummary.get("monthlySpend");
-            if (ms != null) {
-                summary.put("monthlySpend", asDouble(ms));
-            } else {
-                double avgCost = asDouble(summary.get("avgUnitCost"));
-                summary.put("monthlySpend", usedThisMonth * avgCost);
+        if (latestFeedDate == null) {
+            LocalDateTime latestCreatedAt = allFeeds.stream()
+                    .map(Feed::getCreatedAt)
+                    .filter(Objects::nonNull)
+                    .max(LocalDateTime::compareTo)
+                    .orElse(null);
+            if (latestCreatedAt != null) {
+                summary.put("lastFeedDate", latestCreatedAt);
             }
+        } else {
+            summary.put("lastFeedDate", latestFeedDate);
         }
 
-        // Inventory-based recent transactions (if available): overwrite/merge unitCost + better types
-        List<Map<String, Object>> invTx = tryInvokeListOfMaps(inventoryService, "getRecentTransactions",
-                new Class[]{InventoryCategory.class, int.class},
-                new Object[]{InventoryCategory.FEED, 10}
-        );
+        int totalStockOnHand = feedInventory.stream()
+                .mapToInt(item -> safeQuantity(item.getQuantity()))
+                .sum();
 
-        if (invTx != null && !invTx.isEmpty()) {
-            // Expecting each tx map: id, type, quantity, unitCost, date
-            summary.put("recentFeedTransactions", invTx);
+        int lowStockCount = (int) feedInventory.stream()
+                .filter(item -> safeQuantity(item.getQuantity()) <= item.getMinThreshold())
+                .count();
 
-            // If we have unitCost + quantity for this month, compute monthlySpend more accurately
-            double spend = invTx.stream()
-                    .filter(m -> isInCurrentMonth(m.get("date")))
-                    .mapToDouble(m -> asDouble(m.get("unitCost")) * asDouble(m.get("quantity")))
-                    .sum();
-            if (spend > 0) summary.put("monthlySpend", spend);
+        String unit = feedInventory.stream()
+                .map(Inventory::getUnit)
+                .filter(this::hasText)
+                .findFirst()
+                .orElse("kg");
 
-            // If avgUnitCost missing, compute weighted avg from invTx (for current month or all tx)
-            double totalQty = invTx.stream().mapToDouble(m -> asDouble(m.get("quantity"))).sum();
-            double totalCost = invTx.stream().mapToDouble(m -> asDouble(m.get("unitCost")) * asDouble(m.get("quantity"))).sum();
-            if (totalQty > 0) summary.put("avgUnitCost", totalCost / totalQty);
-        }
+        summary.put("totalFeeds", allFeeds.size());
+        summary.put("totalQuantityUsed", totalQuantityUsed);
+        summary.put("usedThisMonth", usedThisMonth);
+        summary.put("monthlySpend", monthlySpend);
+        summary.put("avgUnitCost", averageUnitCost(allFeeds));
+        summary.put("topFeedsByUsage", topFeedsByUsage);
+        summary.put("stockByCategory", stockByCategory);
+        summary.put("feedBreakdown", toBreakdown(usageByCategory));
+        summary.put("recentFeedTransactions", recentFeedTransactions);
+        summary.put("countByType", countByType);
+        summary.put("unit", unit);
+        summary.put("totalStockOnHand", totalStockOnHand);
+        summary.put("lowStockCount", lowStockCount);
+        summary.put("reorderCount", lowStockCount);
 
         return summary;
     }
 
-    // -----------------------------
-    // Helpers (add below getSummary)
-    // -----------------------------
+    private void applyRequest(Feed entity, FeedRequestDto request) {
+        FeedBatchType resolvedBatchType = resolveBatchType(request, entity);
+        String explicitFeedName = sanitize(request.getFeedName());
+        boolean inventoryTracked = hasText(explicitFeedName) || Boolean.TRUE.equals(entity.getInventoryTracked());
+
+        entity.setBatchType(resolvedBatchType);
+        entity.setBatchId(resolveBatchId(request, entity));
+        entity.setFeedName(resolveFeedName(explicitFeedName, entity, resolvedBatchType));
+        entity.setQuantityUsed(resolveQuantityUsed(request, entity));
+        entity.setUnitCost(request.getUnitCost() != null ? request.getUnitCost() : entity.getUnitCost());
+        entity.setNote(request.getNote());
+        entity.setDate(request.getDate() != null ? request.getDate() : entity.getDate() != null ? entity.getDate() : LocalDate.now());
+        entity.setInventoryTracked(inventoryTracked);
+    }
+
+    private FeedBatchType resolveBatchType(FeedRequestDto request, Feed entity) {
+        String raw = sanitize(request.getBatchType());
+        if (!hasText(raw)) {
+            if (entity.getBatchType() != null) {
+                return entity.getBatchType();
+            }
+            throw new IllegalArgumentException("Batch type is required");
+        }
+
+        try {
+            return FeedBatchType.valueOf(raw.toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException ex) {
+            throw new IllegalArgumentException(
+                    "Invalid batchType: '" + raw + "'. Allowed values: " + Arrays.toString(FeedBatchType.values())
+            );
+        }
+    }
+
+    private Long resolveBatchId(FeedRequestDto request, Feed entity) {
+        if (request.getBatchId() != null) {
+            return request.getBatchId();
+        }
+        if (entity.getBatchId() != null) {
+            return entity.getBatchId();
+        }
+        return DEFAULT_BATCH_ID;
+    }
+
+    private Integer resolveQuantityUsed(FeedRequestDto request, Feed entity) {
+        Integer quantityUsed = request.getQuantityUsed() != null ? request.getQuantityUsed() : entity.getQuantityUsed();
+        if (quantityUsed == null || quantityUsed < 1) {
+            throw new IllegalArgumentException("Quantity used is required");
+        }
+        return quantityUsed;
+    }
+
+    private String resolveFeedName(String explicitFeedName, Feed entity, FeedBatchType batchType) {
+        if (hasText(explicitFeedName)) {
+            return explicitFeedName;
+        }
+        if (hasText(entity.getFeedName())) {
+            return entity.getFeedName().trim();
+        }
+        return inferFeedName(batchType);
+    }
+
+    private void reconcileInventory(FeedSnapshot previous, Feed current) {
+        if (previous.tracked && Boolean.TRUE.equals(current.getInventoryTracked()) && Objects.equals(normalize(previous.name), normalize(current.getFeedName()))) {
+            int delta = safeQuantity(current.getQuantityUsed()) - previous.quantity;
+            if (delta != 0) {
+                inventoryService.adjustStock(
+                        current.getFeedName(),
+                        InventoryCategory.FEED,
+                        -delta,
+                        "kg",
+                        "Feed edit delta (id " + current.getId() + ")"
+                );
+            }
+            return;
+        }
+
+        if (previous.tracked) {
+            adjustInventory(previous.name, previous.quantity, "Feed edit refund (id " + current.getId() + ")");
+        }
+
+        if (Boolean.TRUE.equals(current.getInventoryTracked())) {
+            consumeInventoryIfTracked(current, safeQuantity(current.getQuantityUsed()), "Feed edit apply");
+        }
+    }
+
+    private void consumeInventoryIfTracked(Feed feed, int quantity, String reason) {
+        if (!Boolean.TRUE.equals(feed.getInventoryTracked())) {
+            return;
+        }
+        if (!hasText(feed.getFeedName()) || quantity <= 0) {
+            return;
+        }
+        inventoryService.adjustStock(
+                feed.getFeedName(),
+                InventoryCategory.FEED,
+                -quantity,
+                "kg",
+                reason + " (feed id " + feed.getId() + ")"
+        );
+    }
+
+    private void refundInventoryIfTracked(Feed feed, String reason) {
+        if (!Boolean.TRUE.equals(feed.getInventoryTracked())) {
+            return;
+        }
+        adjustInventory(feed.getFeedName(), safeQuantity(feed.getQuantityUsed()), reason + " (feed id " + feed.getId() + ")");
+    }
+
+    private void adjustInventory(String feedName, int quantity, String reason) {
+        if (!hasText(feedName) || quantity <= 0) {
+            return;
+        }
+        inventoryService.adjustStock(
+                feedName,
+                InventoryCategory.FEED,
+                quantity,
+                "kg",
+                reason
+        );
+    }
+
+    private Feed getTenantFeed(Long id, boolean includeDeleted) {
+        Long tenantId = requireTenantId();
+        Feed entity = repo.findByIdAndTenant_Id(id, tenantId)
+                .orElseThrow(() -> new ResourceNotFoundException("Feed", "id", id));
+
+        if (!includeDeleted && Boolean.TRUE.equals(entity.getDeleted())) {
+            throw new ResourceNotFoundException("Feed", "id", id);
+        }
+        return entity;
+    }
+
+    private Long requireTenantId() {
+        Long tenantId = TenantContext.getTenantId();
+        if (tenantId == null) {
+            throw new IllegalStateException("Missing tenant context");
+        }
+        return tenantId;
+    }
+
+    private Tenant resolveTenant(Long tenantId) {
+        return tenantRepository.findById(tenantId)
+                .orElseThrow(() -> new ResourceNotFoundException("Tenant", "id", tenantId));
+    }
+
+    private boolean belongsToTenant(Feed feed, Long tenantId) {
+        return feed != null
+                && feed.getTenant() != null
+                && Objects.equals(feed.getTenant().getId(), tenantId);
+    }
+
+    private boolean belongsToTenant(Inventory inventory, Long tenantId) {
+        return inventory != null
+                && inventory.getTenant() != null
+                && Objects.equals(inventory.getTenant().getId(), tenantId);
+    }
+
+    private FeedBatchType parseBatchType(String batchType) {
+        if (!hasText(batchType)) {
+            return null;
+        }
+        try {
+            return FeedBatchType.valueOf(batchType.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException ex) {
+            throw new IllegalArgumentException(
+                    "Invalid batchType: '" + batchType + "'. Allowed values: " + Arrays.toString(FeedBatchType.values())
+            );
+        }
+    }
+
+    private Map<String, Integer> buildCategoryTotalsFromFeeds(List<Feed> feeds) {
+        Map<String, Integer> totals = emptyCategoryTotals();
+        for (Feed feed : feeds) {
+            String key = categoryKeyForFeed(feed);
+            totals.put(key, totals.getOrDefault(key, 0) + safeQuantity(feed.getQuantityUsed()));
+        }
+        return totals;
+    }
+
+    private Map<String, Integer> buildCategoryTotalsFromInventory(List<Inventory> inventoryItems) {
+        Map<String, Integer> totals = emptyCategoryTotals();
+        for (Inventory item : inventoryItems) {
+            String key = inferFeedCategory(item.getItemName());
+            totals.put(key, totals.getOrDefault(key, 0) + safeQuantity(item.getQuantity()));
+        }
+        return totals;
+    }
+
+    private Map<String, Integer> emptyCategoryTotals() {
+        Map<String, Integer> totals = new LinkedHashMap<>();
+        for (String key : FEED_CATEGORY_KEYS) {
+            totals.put(key, 0);
+        }
+        return totals;
+    }
+
+    private List<Map<String, Object>> toBreakdown(Map<String, Integer> totals) {
+        return totals.entrySet().stream()
+                .filter(entry -> entry.getValue() > 0)
+                .map(entry -> mapOf(
+                        "label", labelForCategory(entry.getKey()),
+                        "value", entry.getValue()
+                ))
+                .toList();
+    }
+
+    private BigDecimal averageUnitCost(List<Feed> allFeeds) {
+        List<BigDecimal> values = allFeeds.stream()
+                .map(Feed::getUnitCost)
+                .filter(Objects::nonNull)
+                .toList();
+
+        if (values.isEmpty()) {
+            return BigDecimal.ZERO;
+        }
+
+        BigDecimal total = values.stream().reduce(BigDecimal.ZERO, BigDecimal::add);
+        return total.divide(BigDecimal.valueOf(values.size()), 2, java.math.RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal calculateTotalCost(Feed feed) {
+        if (feed.getUnitCost() == null) {
+            return BigDecimal.ZERO;
+        }
+        return feed.getUnitCost().multiply(BigDecimal.valueOf(safeQuantity(feed.getQuantityUsed())));
+    }
+
+    private String resolveFeedDisplayName(Feed feed) {
+        if (hasText(feed.getFeedName())) {
+            return feed.getFeedName().trim();
+        }
+        return inferFeedName(feed.getBatchType());
+    }
+
+    private String inferFeedName(FeedBatchType batchType) {
+        if (batchType == null) {
+            return "Other Feed";
+        }
+
+        return switch (batchType) {
+            case LAYER -> "Layer Feed";
+            case BROILER -> "Broiler Feed";
+            case NOILER -> "Noiler Feed";
+            case DUCK -> "Duck Feed";
+            case FISH -> "Fish Feed";
+            case TURKEY -> "Turkey Feed";
+            case FOWL -> "Fowl Feed";
+            case OTHER -> "Other Feed";
+        };
+    }
 
     private String inferFeedCategory(String feedName) {
-        if (feedName == null) return "other";
-        String s = feedName.trim().toLowerCase();
+        if (!hasText(feedName)) {
+            return "other";
+        }
 
-        if (s.contains("starter")) return "starter";
-        if (s.contains("grower")) return "grower";
-        if (s.contains("finisher")) return "finisher";
-        if (s.contains("layer")) return "layer";
-        if (s.contains("broiler")) return "broiler";
-        if (s.contains("fish") || s.contains("catfish") || s.contains("tilapia")) return "fish";
-
+        String value = feedName.trim().toLowerCase(Locale.ROOT);
+        if (value.contains("starter")) return "starter";
+        if (value.contains("grower")) return "grower";
+        if (value.contains("finisher")) return "finisher";
+        if (value.contains("layer")) return "layer";
+        if (value.contains("broiler")) return "broiler";
+        if (value.contains("noiler")) return "noiler";
+        if (value.contains("duck")) return "duck";
+        if (value.contains("fish") || value.contains("catfish") || value.contains("tilapia")) return "fish";
+        if (value.contains("turkey")) return "turkey";
+        if (value.contains("fowl") || value.contains("poul")) return "fowl";
         return "other";
     }
 
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> tryInvokeMap(Object target, String method, Class<?>[] paramTypes, Object[] args) {
-        try {
-            var m = target.getClass().getMethod(method, paramTypes);
-            Object out = m.invoke(target, args);
-            if (out instanceof Map) return (Map<String, Object>) out;
-            return null;
-        } catch (Exception ignored) {
-            return null;
+    private String categoryKeyForFeed(Feed feed) {
+        if (feed == null) {
+            return "other";
+        }
+        if (feed.getBatchType() != null) {
+            return switch (feed.getBatchType()) {
+                case LAYER -> "layer";
+                case BROILER -> "broiler";
+                case NOILER -> "noiler";
+                case DUCK -> "duck";
+                case FISH -> "fish";
+                case TURKEY -> "turkey";
+                case FOWL -> "fowl";
+                case OTHER -> "other";
+            };
+        }
+        return inferFeedCategory(resolveFeedDisplayName(feed));
+    }
+
+    private String labelForCategory(String category) {
+        if (!hasText(category)) {
+            return "Other";
+        }
+        return switch (category) {
+            case "starter" -> "Starter";
+            case "grower" -> "Grower";
+            case "finisher" -> "Finisher";
+            case "layer" -> "Layer";
+            case "broiler" -> "Broiler";
+            case "noiler" -> "Noiler";
+            case "duck" -> "Duck";
+            case "fish" -> "Fish";
+            case "turkey" -> "Turkey";
+            case "fowl" -> "Fowl";
+            default -> "Other";
+        };
+    }
+
+    private boolean isSameMonth(LocalDate value, LocalDate reference) {
+        return value != null
+                && reference != null
+                && value.getMonth() == reference.getMonth()
+                && value.getYear() == reference.getYear();
+    }
+
+    private static LocalDateTime effectiveDateTime(Feed feed) {
+        if (feed.getDate() != null) {
+            return feed.getDate().atStartOfDay();
+        }
+        return feed.getCreatedAt();
+    }
+
+    private int safeQuantity(Integer value) {
+        return value != null ? value : 0;
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.trim().isEmpty();
+    }
+
+    private String sanitize(String value) {
+        return hasText(value) ? value.trim() : null;
+    }
+
+    private String normalize(String value) {
+        return value == null ? null : value.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private Map<String, Object> mapOf(Object... values) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        for (int i = 0; i + 1 < values.length; i += 2) {
+            map.put(String.valueOf(values[i]), values[i + 1]);
+        }
+        return map;
+    }
+
+    private static final class FeedSnapshot {
+        private final String name;
+        private final int quantity;
+        private final boolean tracked;
+
+        private FeedSnapshot(String name, int quantity, boolean tracked) {
+            this.name = name;
+            this.quantity = quantity;
+            this.tracked = tracked;
+        }
+
+        private static FeedSnapshot from(Feed feed) {
+            return new FeedSnapshot(
+                    feed.getFeedName(),
+                    feed.getQuantityUsed() != null ? feed.getQuantityUsed() : 0,
+                    Boolean.TRUE.equals(feed.getInventoryTracked())
+            );
         }
     }
-
-    @SuppressWarnings("unchecked")
-    private List<Map<String, Object>> tryInvokeListOfMaps(Object target, String method, Class<?>[] paramTypes, Object[] args) {
-        try {
-            var m = target.getClass().getMethod(method, paramTypes);
-            Object out = m.invoke(target, args);
-            if (out instanceof List) return (List<Map<String, Object>>) out;
-            return null;
-        } catch (Exception ignored) {
-            return null;
-        }
-    }
-
-    private int asInt(Object v) {
-        if (v == null) return 0;
-        if (v instanceof Number n) return n.intValue();
-        try { return Integer.parseInt(String.valueOf(v)); } catch (Exception e) { return 0; }
-    }
-
-    private double asDouble(Object v) {
-        if (v == null) return 0.0;
-        if (v instanceof Number n) return n.doubleValue();
-        try { return Double.parseDouble(String.valueOf(v)); } catch (Exception e) { return 0.0; }
-    }
-
-    private boolean isInCurrentMonth(Object dateObj) {
-        if (dateObj == null) return false;
-
-        // If it's already a LocalDate
-        if (dateObj instanceof LocalDate d) {
-            LocalDate now = LocalDate.now();
-            return d.getMonth() == now.getMonth() && d.getYear() == now.getYear();
-        }
-
-        // If it's a LocalDateTime
-        if (dateObj instanceof LocalDateTime dt) {
-            LocalDate now = LocalDate.now();
-            return dt.getMonth() == now.getMonth() && dt.getYear() == now.getYear();
-        }
-
-        // If it's a String (ISO expected)
-        try {
-            String s = String.valueOf(dateObj);
-            if (s.length() >= 10) {
-                LocalDate d = LocalDate.parse(s.substring(0, 10));
-                LocalDate now = LocalDate.now();
-                return d.getMonth() == now.getMonth() && d.getYear() == now.getYear();
-            }
-        } catch (Exception ignored) {}
-
-        return false;
-    }
-
-
 }

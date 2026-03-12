@@ -1,6 +1,7 @@
 package com.kfarms.repository;
 
 import com.kfarms.entity.Notification;
+import com.kfarms.entity.NotificationType;
 import jakarta.transaction.Transactional;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -10,22 +11,33 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 public interface NotificationRepository extends JpaRepository<Notification, Long> {
 
     // ---------- READ QUERIES ----------
 
-    List<Notification> findByReadFalseOrderByCreatedAtDesc();
+    List<Notification> findByTenant_IdAndReadFalseOrderByCreatedAtDesc(Long tenantId);
 
     List<Notification> findByUserIdAndReadFalseOrderByCreatedAtDesc(Long userId);
 
+    List<Notification> findAllByTenant_IdOrderByCreatedAtDesc(Long tenantId);
+
+    Optional<Notification> findByIdAndTenant_Id(Long id, Long tenantId);
+
+    List<Notification> findByIdInAndTenant_Id(List<Long> ids, Long tenantId);
+
     @Query("""
         select n from Notification n
-        where (n.user is null or n.user.id = :userId)
+        where n.tenant.id = :tenantId
+          and (n.user is null or n.user.id = :userId)
           and (n.read = false or n.read is null)
         order by n.createdAt desc
     """)
-    List<Notification> findUnreadForUserOrGlobal(@Param("userId") Long userId);
+    List<Notification> findUnreadForUserOrGlobal(
+            @Param("tenantId") Long tenantId,
+            @Param("userId") Long userId
+    );
 
     @Query("""
         select n from Notification n
@@ -42,11 +54,55 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
     );
 
     @Query("""
+        select (count(n) > 0) from Notification n
+        where n.tenant.id = :tenantId
+          and n.type = :type
+          and lower(n.title) = lower(:title)
+          and lower(n.message) = lower(:message)
+          and n.createdAt >= :since
+          and n.user is null
+    """)
+    boolean existsRecentGlobalDuplicate(
+            @Param("tenantId") Long tenantId,
+            @Param("type") NotificationType type,
+            @Param("title") String title,
+            @Param("message") String message,
+            @Param("since") LocalDateTime since
+    );
+
+    @Query("""
+        select (count(n) > 0) from Notification n
+        where n.tenant.id = :tenantId
+          and n.type = :type
+          and lower(n.title) = lower(:title)
+          and lower(n.message) = lower(:message)
+          and n.createdAt >= :since
+          and n.user.id = :userId
+    """)
+    boolean existsRecentUserDuplicate(
+            @Param("tenantId") Long tenantId,
+            @Param("userId") Long userId,
+            @Param("type") NotificationType type,
+            @Param("title") String title,
+            @Param("message") String message,
+            @Param("since") LocalDateTime since
+    );
+
+    @Query("""
     select n from Notification n
-    where (n.user is null or n.user.id = :userId)
+    where n.tenant.id = :tenantId
+      and (n.user is null or n.user.id = :userId)
     order by n.createdAt desc
     """)
-    List<Notification> findForUserOrGlobal(@Param("userId") Long userId);
+    List<Notification> findForUserOrGlobal(@Param("tenantId") Long tenantId, @Param("userId") Long userId);
+
+    @Query("""
+    select n from Notification n
+    where n.tenant.id = :tenantId
+      and (n.read = false or n.read is null)
+    order by n.createdAt desc
+    """)
+    List<Notification> findUnreadByTenantId(@Param("tenantId") Long tenantId, Pageable pageable);
 
 
     // ---------- DELETE (CLEANUP) ----------
@@ -63,4 +119,7 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
     @Modifying
     @Transactional
     int deleteByReadFalseAndCreatedAtBefore(LocalDateTime cutoff);
+
+    long countByTenant_Id(Long tenantId);
+
 }

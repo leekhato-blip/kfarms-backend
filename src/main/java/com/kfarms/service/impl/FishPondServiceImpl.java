@@ -9,6 +9,9 @@ import com.kfarms.mapper.FishPondMapper;
 import com.kfarms.repository.FishPondRepository;
 import com.kfarms.service.FishPondService;
 import com.kfarms.service.NotificationService;
+import com.kfarms.tenant.entity.Tenant;
+import com.kfarms.tenant.service.TenantContext;
+import com.kfarms.tenant.service.TenantPlanGuardService;
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -29,10 +32,21 @@ public class FishPondServiceImpl implements FishPondService {
 
     private final FishPondRepository repo;
     private final NotificationService notification;
+    private final TenantPlanGuardService planGuardService;
 
     // CREATE - add new fishPond
     public FishPondResponseDto create(FishPondRequestDto dto){
+        Tenant tenant = planGuardService.requireCurrentTenant();
+        long activePonds = repo.countActiveByTenantId(tenant.getId());
+        int maxFishPonds = planGuardService.maxFishPondsForPlan(tenant.getPlan());
+        if (maxFishPonds != Integer.MAX_VALUE && activePonds >= maxFishPonds) {
+            throw new IllegalArgumentException(
+                    "Fish pond limit reached for the " + tenant.getPlan().name() + " plan."
+            );
+        }
+
         FishPond entity = FishPondMapper.toEntity(dto);
+        entity.setTenant(tenant);
         FishPond saved = repo.save(entity);
 
         // calculate nextWaterChange before returning response
@@ -52,6 +66,11 @@ public class FishPondServiceImpl implements FishPondService {
             LocalDate lastWaterChange,
             Boolean deleted
     ) {
+        Long tenantId = TenantContext.getTenantId();
+        if (tenantId == null) {
+            throw new IllegalArgumentException("Missing tenant context");
+        }
+
         Sort sort = Boolean.TRUE.equals(deleted)
                 ? Sort.by(Sort.Direction.DESC, "deletedAt").and(Sort.by(Sort.Direction.DESC, "id"))
                 : Sort.by(Sort.Direction.DESC, "id");
@@ -60,6 +79,8 @@ public class FishPondServiceImpl implements FishPondService {
 
         Specification<FishPond> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
+
+            predicates.add(cb.equal(root.get("tenant").get("id"), tenantId));
 
             // deleted filter (default: show non-deleted)
             if (Boolean.TRUE.equals(deleted)) {
@@ -127,7 +148,8 @@ public class FishPondServiceImpl implements FishPondService {
     // READ - get fishPond by ID
     @Override
     public FishPondResponseDto getById(Long id){
-        Optional<FishPond> fishPond = repo.findById(id)
+        Long tenantId = TenantContext.getTenantId();
+        Optional<FishPond> fishPond = repo.findByIdAndTenant_Id(id, tenantId)
                 .filter(f -> !Boolean.TRUE.equals(f.getDeleted()));
 
 
@@ -142,7 +164,8 @@ public class FishPondServiceImpl implements FishPondService {
     // UPDATE - update existing fishPond by ID
     @Override
     public FishPondResponseDto update(Long id, FishPondRequestDto request, String updatedBy){
-        FishPond entity = repo.findById(id)
+        Long tenantId = TenantContext.getTenantId();
+        FishPond entity = repo.findByIdAndTenant_Id(id, tenantId)
                 .orElseThrow(() -> new ResourceNotFoundException("FishPond", "id", id));
 
         // Update only non-null fields
@@ -210,7 +233,8 @@ public class FishPondServiceImpl implements FishPondService {
 
     // DELETE - delete existing entity by ID
     public void delete(Long id, String deletedBy){
-        FishPond entity = repo.findById(id)
+        Long tenantId = TenantContext.getTenantId();
+        FishPond entity = repo.findByIdAndTenant_Id(id, tenantId)
                 .orElseThrow(() -> new ResourceNotFoundException("FishPond", "id", id));
 
         if (Boolean.TRUE.equals(entity.getDeleted())) {
@@ -226,14 +250,16 @@ public class FishPondServiceImpl implements FishPondService {
     // DELETE (permanent)
     @Override
     public void permanentDelete(Long id, String deletedBy) {
-        FishPond entity = repo.findById(id)
+        Long tenantId = TenantContext.getTenantId();
+        FishPond entity = repo.findByIdAndTenant_Id(id, tenantId)
                 .orElseThrow(() -> new ResourceNotFoundException("FishPond", "id", id));
         repo.delete(entity);
     }
 
     // RESTORE
     public void restore(Long id) {
-        FishPond entity = repo.findById(id)
+        Long tenantId = TenantContext.getTenantId();
+        FishPond entity = repo.findByIdAndTenant_Id(id, tenantId)
                 .orElseThrow(() -> new ResourceNotFoundException("FishPond", "id", id));
 
         if (!Boolean.TRUE.equals(entity.getDeleted())) {
@@ -248,10 +274,13 @@ public class FishPondServiceImpl implements FishPondService {
     // SUMMARY - Dashboard, Report and Analysis
     @Override
     public Map<String, Object> getSummary() {
-        List<FishPond> all = repo.findAll()
-                .stream()
-                .filter(f -> !Boolean.TRUE.equals(f.getDeleted()))
-                .toList();
+
+        Long tenantId = TenantContext.getTenantId();
+        if (tenantId == null) {
+            throw new IllegalArgumentException("Missing tenant context");
+        }
+
+        List<FishPond> all = repo.findAllActiveByTenantId(tenantId);
 
         Map<String, Object> summary = new HashMap<>();
 
@@ -306,7 +335,7 @@ public class FishPondServiceImpl implements FishPondService {
         // This must come from a "stock records / movements / stocking events" table.
         // If you don’t have that table, monthly stock totals can’t be historically correct.
         // Replace fishStockRepo with your actual repo (e.g. FishPondStockingRepo, FishStockRecordRepo, etc.)
-        for (Object[] row : repo.sumMonthlyStockTotals(start, end)) {
+        for (Object[] row : repo.sumMonthlyStockTotalsByTenant(tenantId, start, end)) {
             int y = ((Number) row[0]).intValue();
             int m = ((Number) row[1]).intValue();
             long total = row[2] == null ? 0L : ((Number) row[2]).longValue();
@@ -336,6 +365,7 @@ public class FishPondServiceImpl implements FishPondService {
         if (totalFishes < 100) {
             alerts.put("fishLow", "Fish stock is below normal levels!");
             notification.createNotification(
+                    tenantId,
                     "FISH",
                     "Low Fish Stock",
                     "Total fish count is below 100.",
@@ -350,6 +380,7 @@ public class FishPondServiceImpl implements FishPondService {
                 String msg = String.format("Mortality rate is %.2f%% — above 10%% threshold.", mortalityRate);
                 alerts.put("highMortality", msg);
                 notification.createNotification(
+                        tenantId,
                         "FISH",
                         "High Mortality",
                         msg,
@@ -374,6 +405,7 @@ public class FishPondServiceImpl implements FishPondService {
             String msg = dueCount + " pond(s) need water change.";
             alerts.put("waterChangeDue", msg);
             notification.createNotification(
+                    tenantId,
                     "FISH",
                     "Water Change Due",
                     dueCount + " pond(s) require water change today or earlier.",
@@ -388,7 +420,8 @@ public class FishPondServiceImpl implements FishPondService {
     // ADJUST stock
     @Override
     public FishPondResponseDto adjustStock(Long id, StockAdjustmentRequestDto request, String updatedBy) {
-        FishPond pond = repo.findById(id)
+        Long tenantId = TenantContext.getTenantId();
+        FishPond pond = repo.findByIdAndTenant_Id(id, tenantId)
                 .filter(f -> !Boolean.TRUE.equals(f.getDeleted()))
                 .orElseThrow(() -> new ResourceNotFoundException("FishPond", "id", id));
 

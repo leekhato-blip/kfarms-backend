@@ -6,14 +6,15 @@ import com.kfarms.dto.LivestockResponseDto;
 import com.kfarms.dto.StockAdjustmentRequestDto;
 import com.kfarms.entity.Livestock;
 import com.kfarms.entity.LivestockType;
-import com.kfarms.entity.Supplies;
 import com.kfarms.exceptions.ResourceNotFoundException;
 import com.kfarms.mapper.LivestockMapper;
 import com.kfarms.repository.EggProductionRepo;
 import com.kfarms.repository.LivestockRepository;
 import com.kfarms.service.LivestockService;
 import com.kfarms.service.NotificationService;
-import com.kfarms.tenant.TenantContext;
+import com.kfarms.tenant.entity.Tenant;
+import com.kfarms.tenant.service.TenantContext;
+import com.kfarms.tenant.service.TenantPlanGuardService;
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -35,11 +36,21 @@ public class LivestockServiceImpl implements LivestockService {
     private final LivestockRepository repo;
     private final EggProductionRepo eggRepo;
     private final NotificationService notification;
+    private final TenantPlanGuardService planGuardService;
 
     // CREATE - create Livestock
     @Override
     public  LivestockResponseDto create(LivestockRequestDto request, String createBy) {
-        Long tenantId = TenantContext.getTenantId();
+        Tenant tenant = planGuardService.requireCurrentTenant();
+        Long tenantId = tenant.getId();
+        long activeBatches = repo.countActiveByTenantId(tenantId);
+        int maxPoultryFlocks = planGuardService.maxPoultryFlocksForPlan(tenant.getPlan());
+        if (maxPoultryFlocks != Integer.MAX_VALUE && activeBatches >= maxPoultryFlocks) {
+            throw new IllegalArgumentException(
+                    "Poultry flock limit reached for the " + tenant.getPlan().name() + " plan."
+            );
+        }
+
         Livestock entity = LivestockMapper.toEntity(request);
         entity.setTenantId(tenantId);
         entity.setCreatedBy(createBy);
@@ -157,16 +168,15 @@ public class LivestockServiceImpl implements LivestockService {
         if (request.getNote() != null) {
             entity.setNote(request.getNote());
         }
+        if (request.getKeepingMethod() != null) {
+            entity.setKeepingMethod(request.getKeepingMethod());
+        } else if (request.getType() != null && request.getType() != LivestockType.LAYER) {
+            entity.setKeepingMethod(null);
+        }
         entity.setUpdatedBy(updatedBy);
 
         // Handle quantity & mortality smartly
         if (request.getMortality() != null && request.getMortality() > 0) {
-            // NOTIFICATION
-            notification.createNotification(
-                    "LIVESTOCK",
-                    "Mortality Recorded",
-                    request.getMortality() + " deaths recorded in batch " + entity.getBatchName(),
-                    null);
             int currentMortality = entity.getMortality() != null ? entity.getMortality() : 0;
             int currentQty = (entity.getCurrentStock() != null) ? entity.getCurrentStock() : 0;
 
@@ -234,10 +244,6 @@ public class LivestockServiceImpl implements LivestockService {
         // filter out deleted items
         Long tenantId = TenantContext.getTenantId();
         List<Livestock> all = repo.findAllActive(tenantId);
-//        List<Livestock> all = repo.findAll()
-//                .stream()
-//                .filter(l -> !Boolean.TRUE.equals(l.getDeleted()))
-//                .toList();
 
         Map<String, Object> summary = new HashMap<>();
 
@@ -265,6 +271,7 @@ public class LivestockServiceImpl implements LivestockService {
         // ==== NOTIFICATIONS ====
         if (totalQuantity < 50) {
             notification.createNotification(
+                    tenantId,
                     "LIVESTOCK",
                     "Low Livestock Count",
                     "Total livestock count has dropped below 50. Please inspect",
@@ -272,6 +279,7 @@ public class LivestockServiceImpl implements LivestockService {
         }
         if (totalMortality > 20) {
             notification.createNotification(
+                    tenantId,
                     "LIVESTOCK",
                     "High Mortality Alert",
                     "More than 20 deaths record. Investigate possible disease or stress factors",

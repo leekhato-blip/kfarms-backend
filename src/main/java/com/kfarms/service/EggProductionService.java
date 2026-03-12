@@ -9,10 +9,11 @@ import java.util.Map;
 public interface EggProductionService {
 
     EggProductionResponseDto create(EggProductionRequestDto request);
-    Map<String, Object> getAll(int page, int size, Long livestockId, LocalDate collectionDate);
+    Map<String, Object> getAll(int page, int size, Long livestockId, LocalDate collectionDate, Boolean deleted);
     EggProductionResponseDto getById(Long id);
     EggProductionResponseDto update(Long id, EggProductionRequestDto request, String updatedBy);
     void delete(Long id, String deletedBy);
+    void permanentDelete(Long id, String deletedBy);
     void restore(Long id);
     Map<String, Object> getSummary();
 

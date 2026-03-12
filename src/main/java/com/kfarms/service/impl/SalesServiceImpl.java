@@ -11,6 +11,9 @@ import com.kfarms.repository.SalesRepository;
 import com.kfarms.service.InventoryService;
 import com.kfarms.service.NotificationService;
 import com.kfarms.service.SalesService;
+import com.kfarms.tenant.entity.Tenant;
+import com.kfarms.tenant.repository.TenantRepository;
+import com.kfarms.tenant.service.TenantContext;
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -33,12 +36,15 @@ public class SalesServiceImpl implements SalesService {
     private final SalesRepository salesRepo;
     private final InventoryService inventoryService;
     private final NotificationService notification;
+    private final TenantRepository tenantRepository;
 
 
     // CREATE - add a new sale item
     @Override
     public SalesResponseDto create(SalesRequestDto dto) {
+        Long tenantId = requireTenantId();
         Sales entity = SalesMapper.toEntity(dto);
+        entity.setTenant(resolveTenant(tenantId));
         Sales saved = salesRepo.save(entity);
         return SalesMapper.toResponseDto(saved);
     }
@@ -46,6 +52,7 @@ public class SalesServiceImpl implements SalesService {
     // READ - get all sales with pagination & filters
     @Override
     public Map<String, Object> getAll(int page, int size, String itemName, String category, LocalDate date, Boolean deleted) {
+        Long tenantId = requireTenantId();
 
         Sort sort = Boolean.TRUE.equals(deleted)
                 ? Sort.by(Sort.Direction.DESC, "deletedAt")
@@ -57,6 +64,7 @@ public class SalesServiceImpl implements SalesService {
         Specification<Sales> spec = (root, query, cb) -> {
 
           List<Predicate> predicates = new ArrayList<>();
+          predicates.add(cb.equal(root.get("tenant").get("id"), tenantId));
           if (deleted != null) {
               predicates.add(cb.equal(root.get("deleted"), deleted));
           }
@@ -95,7 +103,8 @@ public class SalesServiceImpl implements SalesService {
     // READ - get sale item by ID
     @Override
     public SalesResponseDto getById(Long id) {
-        Sales entity = salesRepo.findById(id)
+        Long tenantId = requireTenantId();
+        Sales entity = salesRepo.findByIdAndTenant_Id(id, tenantId)
                 .filter(s -> !Boolean.TRUE.equals(s.getDeleted()))
                 .orElseThrow(() -> new ResourceNotFoundException("Sales", "id", id));
 
@@ -105,7 +114,8 @@ public class SalesServiceImpl implements SalesService {
     // UPDATE - update existing sales item by ID
     @Override
     public SalesResponseDto update(Long id, SalesRequestDto request, String updatedBy) {
-        Sales entity = salesRepo.findById(id)
+        Long tenantId = requireTenantId();
+        Sales entity = salesRepo.findByIdAndTenant_Id(id, tenantId)
                 .filter(s -> !Boolean.TRUE.equals(s.getDeleted()))
                 .orElseThrow(() -> new ResourceNotFoundException("Sales", "id", id));
 
@@ -114,6 +124,9 @@ public class SalesServiceImpl implements SalesService {
         entity.setQuantity(request.getQuantity());
         entity.setUnitPrice(request.getUnitPrice());
         entity.setBuyer(request.getBuyer());
+        entity.setNote(request.getNote());
+        entity.setSalesDate(request.getSalesDate() != null ? request.getSalesDate() : entity.getSalesDate());
+        entity.setTotalPrice(calculateTotalPrice(request.getQuantity(), request.getUnitPrice()));
         entity.setUpdatedBy(updatedBy);
 
         salesRepo.save(entity);
@@ -123,7 +136,8 @@ public class SalesServiceImpl implements SalesService {
     // DELETE - delete sales item by ID
     @Override
     public void delete(Long id, String deletedBy) {
-        Sales entity = salesRepo.findById(id)
+        Long tenantId = requireTenantId();
+        Sales entity = salesRepo.findByIdAndTenant_Id(id, tenantId)
                 .orElseThrow(() -> new ResourceNotFoundException("Sales", "id", id));
 
         if (Boolean.TRUE.equals(entity.getDeleted())) {
@@ -139,7 +153,8 @@ public class SalesServiceImpl implements SalesService {
     // DELETE (permanent)
     @Override
     public void permanentDelete(Long id, String deletedBy) {
-        Sales entity = salesRepo.findById(id)
+        Long tenantId = requireTenantId();
+        Sales entity = salesRepo.findByIdAndTenant_Id(id, tenantId)
                 .orElseThrow(() -> new ResourceNotFoundException("Sales", "id", id));
         salesRepo.delete(entity);
     }
@@ -147,7 +162,8 @@ public class SalesServiceImpl implements SalesService {
     // RESTORE
     @Override
     public void restore(Long id) {
-        Sales entity = salesRepo.findById(id)
+        Long tenantId = requireTenantId();
+        Sales entity = salesRepo.findByIdAndTenant_Id(id, tenantId)
                 .orElseThrow(() -> new ResourceNotFoundException("Sales", "id", id));
 
         if (!Boolean.TRUE.equals(entity.getDeleted())) {
@@ -163,10 +179,9 @@ public class SalesServiceImpl implements SalesService {
     @Override
     public Map<String, Object> getSummary() {
 
-        List<Sales> all = salesRepo.findAll()
-                .stream()
-                .filter(s -> !Boolean.TRUE.equals(s.getDeleted()))
-                .toList();
+        Long tenantId = TenantContext.getTenantId();
+
+        List<Sales> all = salesRepo.findAllActiveByTenantId(tenantId);
 
         Map<String, Object> summary = new HashMap<>();
 
@@ -257,6 +272,7 @@ public class SalesServiceImpl implements SalesService {
         if (revenueLastMonth.compareTo(BigDecimal.ZERO) > 0 &&
         revenueThisMonth.compareTo(revenueLastMonth) < 0) {
             notification.createNotification(
+                    tenantId,
                     "FINANCE",
                     "Revenue Drop Alert",
                     "This month's revenue (" + revenueThisMonth + ") is lower than last month " + revenueLastMonth + ").",
@@ -271,6 +287,7 @@ public class SalesServiceImpl implements SalesService {
 
         if (noSalesLast7Days) {
             notification.createNotification(
+                    tenantId,
                     "FINANCE",
                     "No Sales Activity",
                     "No sales have been recorded in the last 7 days.",
@@ -278,5 +295,25 @@ public class SalesServiceImpl implements SalesService {
             );
         }
         return summary;
+    }
+
+    private BigDecimal calculateTotalPrice(Integer quantity, BigDecimal unitPrice) {
+        if (quantity == null || unitPrice == null) {
+            return BigDecimal.ZERO;
+        }
+        return unitPrice.multiply(BigDecimal.valueOf(quantity.longValue()));
+    }
+
+    private Long requireTenantId() {
+        Long tenantId = TenantContext.getTenantId();
+        if (tenantId == null) {
+            throw new IllegalStateException("Missing tenant context");
+        }
+        return tenantId;
+    }
+
+    private Tenant resolveTenant(Long tenantId) {
+        return tenantRepository.findById(tenantId)
+                .orElseThrow(() -> new ResourceNotFoundException("Tenant", "id", tenantId));
     }
 }

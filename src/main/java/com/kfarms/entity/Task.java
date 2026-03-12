@@ -1,6 +1,7 @@
 package com.kfarms.entity;
 
 
+import com.kfarms.tenant.entity.Tenant;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import lombok.*;
@@ -46,6 +47,10 @@ public class Task extends Auditable {
     // Loose coupling to domain entities (optional)
     private  String relatedEntityType; // e.g., "POND", "LIVESTOCK", "FEED"
     private Long relatedEntityId;
+
+    @ManyToOne(optional = false)
+    @JoinColumn(name = "tenant_id", nullable = false)
+    private Tenant tenant;
 
 
 

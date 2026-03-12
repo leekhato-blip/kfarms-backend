@@ -6,6 +6,8 @@ import com.kfarms.dto.SuppliesResponseDto;
 import com.kfarms.entity.ApiResponse;
 import com.kfarms.entity.AppUser;
 import com.kfarms.service.SuppliesService;
+import com.kfarms.tenant.entity.TenantPlan;
+import com.kfarms.tenant.service.TenantPlanGuardService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -25,6 +27,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class SuppliesController {
     private final SuppliesService service;
+    private final TenantPlanGuardService tenantPlanGuardService;
 
     // CREATE - add a new supply
     @PostMapping
@@ -49,6 +52,12 @@ public class SuppliesController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
             @RequestParam(required = false, defaultValue = "false") Boolean deleted
             ){
+        if (Boolean.TRUE.equals(deleted)) {
+            tenantPlanGuardService.requireCurrentTenantPlanAccess(
+                    TenantPlan.PRO,
+                    "Trash restore is available on the Pro plan."
+            );
+        }
         Map<String, Object> response = service.getAll(page, size, itemName, category, date, deleted);
         return ResponseEntity.ok(new ApiResponse<>(true, "Supplies fetched successfully", response));
     }
@@ -99,6 +108,10 @@ public class SuppliesController {
     @DeleteMapping("/{id}/permanent")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<String>> permanentDelete(@PathVariable Long id) {
+        tenantPlanGuardService.requireCurrentTenantPlanAccess(
+                TenantPlan.PRO,
+                "Trash restore is available on the Pro plan."
+        );
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String deletedBy = auth != null ? auth.getName() : "SYSTEM";
         service.permanentDelete(id, deletedBy);
@@ -111,6 +124,10 @@ public class SuppliesController {
     @PutMapping("/{id}/restore")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<String>> restore(@PathVariable Long id) {
+        tenantPlanGuardService.requireCurrentTenantPlanAccess(
+                TenantPlan.PRO,
+                "Trash restore is available on the Pro plan."
+        );
         service.restore(id);
         return ResponseEntity.ok(
                 new ApiResponse<>(true, "Record restored", null)

@@ -1,6 +1,7 @@
 package com.kfarms.dto;
 
 import com.kfarms.entity.LivestockType;
+import com.kfarms.entity.PoultryKeepingMethod;
 import com.kfarms.entity.SourceType;
 import jakarta.validation.constraints.*;
 import lombok.Data;
@@ -32,6 +33,8 @@ public class LivestockRequestDto {
 
     @Min(value = 0, message = "Mortality cannot be negative")
     private Integer mortality;           // optional; default 0
+
+    private PoultryKeepingMethod keepingMethod;
 
     @Size(max = 255, message = "Note cannot exceed 255 characters")
     private String note;

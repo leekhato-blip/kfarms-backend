@@ -51,4 +51,5 @@ public abstract class Auditable {
     @Column(name = "deleted_at")
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "Africa/Lagos")
     private LocalDateTime deletedAt;
+    
 }

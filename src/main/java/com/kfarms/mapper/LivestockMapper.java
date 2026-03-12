@@ -5,6 +5,7 @@ import com.kfarms.dto.LivestockRequestDto;
 import com.kfarms.dto.LivestockResponseDto;
 import com.kfarms.entity.Livestock;
 import com.kfarms.entity.LivestockType;
+import com.kfarms.entity.PoultryKeepingMethod;
 import com.kfarms.entity.SourceType;
 
 import java.time.LocalDate;
@@ -49,6 +50,7 @@ public class LivestockMapper {
 
         // NOTE
         entity.setNote(request.getNote());
+        entity.setKeepingMethod(resolveKeepingMethod(request.getType(), request.getKeepingMethod()));
 
         return entity;
     }
@@ -64,6 +66,7 @@ public class LivestockMapper {
         response.setStartingAgeInWeeks(entity.getStartingAgeInWeeks());
         response.setAgeInWeeks(entity.getAgeInWeeks()); // derived
         response.setMortality(entity.getMortality());
+        response.setKeepingMethod(entity.getKeepingMethod());
         response.setNote(entity.getNote());
 
         // audit
@@ -72,5 +75,15 @@ public class LivestockMapper {
         response.setCreatedAt(entity.getCreatedAt());
         response.setUpdatedAt(entity.getUpdatedAt());
         return response;
+    }
+
+    private static PoultryKeepingMethod resolveKeepingMethod(
+            LivestockType type,
+            PoultryKeepingMethod keepingMethod
+    ) {
+        if (type != LivestockType.LAYER) {
+            return null;
+        }
+        return keepingMethod;
     }
 }

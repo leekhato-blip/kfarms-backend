@@ -5,12 +5,14 @@ import com.kfarms.repository.AppUserRepository;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
+import org.springframework.mail.MailException;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -24,26 +26,23 @@ public class PasswordResetService {
     private final PasswordEncoder passwordEncoder;
     private final JavaMailSender mailSender;
 
+    @Value("${kfarms.frontend.base-url:http://localhost:5173}")
+    private String frontendBaseUrl;
+
     @Transactional
     public void sendResetEmail(String email) {
-        AppUser user = userRepo.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found"));
-
-        // Check for existing token
-        PasswordResetToken existingToken = tokenRepo.findByUserId(user.getId())
-                .filter(t -> t.getExpiryDate().isAfter(LocalDateTime.now()))
-                .orElse(null);
-
-        if (existingToken != null) {
-            throw new RuntimeException(
-                    "A password reset has already been sent. Please check your email. The link is valid for 30 minutes"
-            );
+        String normalizedEmail = normalizeEmail(email);
+        if (normalizedEmail == null) {
+            return;
         }
 
-        // Delete old tokens
+        AppUser user = userRepo.findByEmail(normalizedEmail).orElse(null);
+        if (user == null) {
+            return;
+        }
+
         tokenRepo.deleteByUser(user.getId());
 
-        // Create new token
         String token = UUID.randomUUID().toString();
         PasswordResetToken resetToken = new PasswordResetToken();
         resetToken.setToken(token);
@@ -51,14 +50,12 @@ public class PasswordResetService {
         resetToken.setExpiryDate(LocalDateTime.now().plusMinutes(30));
         tokenRepo.save(resetToken);
 
-        String resetLink = "http://localhost:5173/auth/reset-password?token=" + token;
+        String resetLink = buildResetLink(token);
 
-        // Send email async
-        sendEmailAsync(user.getEmail(), user.getUsername(), resetLink);
+        sendEmail(user.getEmail(), user.getUsername(), resetLink);
     }
 
-    @Async
-    public void sendEmailAsync(String to, String username, String resetLink) {
+    public void sendEmail(String to, String username, String resetLink) {
         try {
             MimeMessage mimeMessage = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, "utf-8");
@@ -80,24 +77,49 @@ public class PasswordResetService {
 
             mailSender.send(mimeMessage);
             System.out.println("Password reset email sent to " + to);
-        } catch (MessagingException e) {
-            System.err.println("Failed to send email to " + to);
-            e.printStackTrace();
+        } catch (MailException | MessagingException e) {
+            throw new IllegalStateException("We could not send the reset email right now. Please try again.");
         }
     }
 
     @Transactional
     public void resetPassword(String token, String newPassword) {
-        PasswordResetToken resetToken = tokenRepo.findByToken(token)
-                .orElseThrow(() -> new RuntimeException("Invalid token"));
+        String normalizedToken = token == null ? "" : token.trim();
+        String normalizedPassword = newPassword == null ? "" : newPassword.trim();
+
+        if (!StringUtils.hasText(normalizedToken)) {
+            throw new IllegalArgumentException("Invalid or expired reset link.");
+        }
+
+        if (normalizedPassword.length() < 8) {
+            throw new IllegalArgumentException("Use at least 8 characters for your new password.");
+        }
+
+        PasswordResetToken resetToken = tokenRepo.findByToken(normalizedToken)
+                .orElseThrow(() -> new IllegalArgumentException("Invalid or expired reset link."));
 
         if (resetToken.getExpiryDate().isBefore(LocalDateTime.now())) {
-            throw new RuntimeException("Token expired");
+            tokenRepo.delete(resetToken);
+            throw new IllegalArgumentException("This reset link has expired. Request a new one.");
         }
 
         AppUser user = resetToken.getUser();
-        user.setPassword(passwordEncoder.encode(newPassword));
+        user.setPassword(passwordEncoder.encode(normalizedPassword));
         userRepo.save(user);
         tokenRepo.delete(resetToken);
+    }
+
+    private String normalizeEmail(String email) {
+        if (!StringUtils.hasText(email)) {
+            return null;
+        }
+        return email.trim().toLowerCase();
+    }
+
+    private String buildResetLink(String token) {
+        String baseUrl = StringUtils.hasText(frontendBaseUrl)
+                ? frontendBaseUrl.trim().replaceAll("/+$", "")
+                : "http://localhost:5173";
+        return baseUrl + "/auth/reset-password?token=" + token;
     }
 }

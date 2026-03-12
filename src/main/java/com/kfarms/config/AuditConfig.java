@@ -9,7 +9,6 @@ import org.springframework.data.domain.AuditorAware;
 public class AuditConfig {
     @Bean(name = "auditorProvider")
     public AuditorAware<String> auditorProvider(){
-        System.out.println("✅ JPA Auditing Enabled!");
         return new AuditorAwareImpl();
     }
 }

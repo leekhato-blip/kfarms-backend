@@ -2,19 +2,18 @@ package com.kfarms.exceptions;
 
 import com.kfarms.entity.ApiResponse;
 import jakarta.persistence.EntityNotFoundException;
-import jdk.dynalink.linker.MethodHandleTransformer;
 import lombok.extern.slf4j.Slf4j;
 import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
-import java.nio.file.AccessDeniedException;
 import java.util.Arrays;
 
 @Slf4j
@@ -62,8 +61,12 @@ public class GlobalExceptionHandler  {
     // Access denied
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ApiResponse<String>> handleAccessDenied(AccessDeniedException ex){
+        String message = ex.getMessage();
+        if (message == null || message.isBlank()) {
+            message = "You are not authorized to perform this action";
+        }
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                .body(new ApiResponse<>(false, "You are not authorized to perform this action", null));
+                .body(new ApiResponse<>(false, message, null));
     }
 
     // Authentication failed

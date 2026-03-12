@@ -1,5 +1,6 @@
 package com.kfarms.service;
 
+import com.kfarms.dto.NotificationResponseDto;
 import com.kfarms.entity.AppUser;
 import com.kfarms.entity.Notification;
 
@@ -12,12 +13,15 @@ public interface NotificationService {
      * If user is null => create a global/system notification visible to everyone.
      * If user is non-null => user-specific notification.
      */
-    void createNotification(String type, String title, String message, AppUser user);
+    default void createNotification(Long tenantId, String type, String title, String message, AppUser user) {
 
-    List<Notification> getAllNotification();
-    List<Notification> getUnreadNotification();
-    List<Notification> getUnreadNotificationByUser(Long userId);
+    }
+
+    List<NotificationResponseDto> getAllNotification();
+    List<NotificationResponseDto> getUnreadNotification();
+    List<NotificationResponseDto> getUnreadNotificationByUser(Long userId);
     void markAsRead(Long id);
     void markMultipleAsRead(List<Long> ids);
-    List<Notification> getNotificationForUser(Long userId);
+    List<NotificationResponseDto> getNotificationForUser(Long userId);
+    NotificationResponseDto toResponse(Notification notification, boolean read);
 }

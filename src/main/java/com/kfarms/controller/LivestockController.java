@@ -6,6 +6,8 @@ import com.kfarms.dto.LivestockResponseDto;
 import com.kfarms.dto.StockAdjustmentRequestDto;
 import com.kfarms.entity.ApiResponse;
 import com.kfarms.service.LivestockService;
+import com.kfarms.tenant.entity.TenantPlan;
+import com.kfarms.tenant.service.TenantPlanGuardService;
 import jakarta.validation.Valid;
 import lombok.AllArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -27,6 +29,7 @@ import java.util.Map;
 @Validated
 public class LivestockController {
     private final LivestockService service;
+    private final TenantPlanGuardService tenantPlanGuardService;
 
     // CREATE - add new livestock
     @PreAuthorize("hasRole('ADMIN')")
@@ -51,14 +54,34 @@ public class LivestockController {
         @RequestParam(defaultValue = "10") int size,
         @RequestParam(required = false) String batchName,
         @RequestParam(required = false) String type,
-        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate arrivalDate
+        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate arrivalDate,
+        @RequestParam(required = false, defaultValue = "false") Boolean deleted
 
     ){
-        Map<String, Object> response = service.getAll(page, size, batchName, type, arrivalDate);
+        if (Boolean.TRUE.equals(deleted)) {
+            tenantPlanGuardService.requireCurrentTenantPlanAccess(
+                    TenantPlan.PRO,
+                    "Trash restore is available on the Pro plan."
+            );
+        }
+        Map<String, Object> response = service.getAll(page, size, batchName, type, arrivalDate, deleted);
         return ResponseEntity.ok(
                 new ApiResponse<>(true, "Livestock fetched successfully", response)
         );
     }
+
+    // LIVESTOCK PAGE OVERVIEW (rich)
+    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER') or hasRole('STAFF')")
+    @GetMapping("/overview")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> overview(
+            @RequestParam(defaultValue = "30") int rangeDays
+    ) {
+        Map<String, Object> data = service.getOverview(rangeDays);
+        return ResponseEntity.ok(
+                new ApiResponse<>(true, "Livestock overview fetched successfully", data)
+        );
+    }
+
 
     // READ - get livestock by ID
     @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER') or hasRole('STAFF')")
@@ -102,10 +125,30 @@ public class LivestockController {
         );
     }
 
+    // PERMANENT DELETE
+    @DeleteMapping("/{id}/permanent")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<String>> permanentDelete(@PathVariable Long id) {
+        tenantPlanGuardService.requireCurrentTenantPlanAccess(
+                TenantPlan.PRO,
+                "Trash restore is available on the Pro plan."
+        );
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String deletedBy = auth != null ? auth.getName() : "SYSTEM";
+        service.permanentDelete(id, deletedBy);
+        return ResponseEntity.ok(
+                new ApiResponse<>(true, "Sales record deleted permanently", null)
+        );
+    }
+
     // RESTORE
     @PutMapping("/{id}/restore")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse> restore(@PathVariable Long id) {
+        tenantPlanGuardService.requireCurrentTenantPlanAccess(
+                TenantPlan.PRO,
+                "Trash restore is available on the Pro plan."
+        );
         service.restore(id);
         return ResponseEntity.ok(
                 new ApiResponse(true, "Livestock record restored", null)

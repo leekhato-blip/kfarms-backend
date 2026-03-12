@@ -19,7 +19,7 @@ public class SuppliesMapper {
         dto.setQuantity(entity.getQuantity());
         dto.setUnitPrice(entity.getUnitPrice());
         dto.setTotalPrice(entity.getTotalPrice());
-        dto.setDate(entity.getSupplyDate());
+        dto.setSupplyDate(entity.getSupplyDate());
         dto.setNote(entity.getNote());
         
 

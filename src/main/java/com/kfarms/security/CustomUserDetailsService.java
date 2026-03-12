@@ -22,11 +22,15 @@ public class CustomUserDetailsService implements UserDetailsService {
                 .or(() -> userRepo.findByUsername(input))
                 .orElseThrow(() -> new UsernameNotFoundException("User not found"));
 
-        return User.withUsername(user.getEmail()) // email is main identity
+        return User.withUsername(user.getEmail())
                 .password(user.getPassword())
-                .roles(user.getRole().name()) // e.g. ADMIN
+                .authorities(
+                        "ROLE_USER",
+                        "ROLE_" + user.getRole().name()
+                )
                 .build();
     }
+
 
 
 }

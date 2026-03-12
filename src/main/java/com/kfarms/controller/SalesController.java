@@ -4,6 +4,8 @@ import com.kfarms.dto.SalesRequestDto;
 import com.kfarms.dto.SalesResponseDto;
 import com.kfarms.entity.ApiResponse;
 import com.kfarms.service.SalesService;
+import com.kfarms.tenant.entity.TenantPlan;
+import com.kfarms.tenant.service.TenantPlanGuardService;
 import jakarta.validation.Valid;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
@@ -19,8 +21,11 @@ import java.util.Map;
 @RequestMapping("/api/sales")
 public class SalesController {
     private final SalesService service;
-    public SalesController(SalesService service){
+    private final TenantPlanGuardService tenantPlanGuardService;
+
+    public SalesController(SalesService service, TenantPlanGuardService tenantPlanGuardService){
         this.service = service;
+        this.tenantPlanGuardService = tenantPlanGuardService;
     }
 
     // CREATE - add new supply item
@@ -43,9 +48,16 @@ public class SalesController {
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(required = false) String itemName,
             @RequestParam(required = false) String category,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam(required = false, defaultValue = "false") Boolean deleted
             ){
-        Map<String, Object> response = service.getAll(page, size, itemName, category, date);
+        if (Boolean.TRUE.equals(deleted)) {
+            tenantPlanGuardService.requireCurrentTenantPlanAccess(
+                    TenantPlan.PRO,
+                    "Trash restore is available on the Pro plan."
+            );
+        }
+        Map<String, Object> response = service.getAll(page, size, itemName, category, date, deleted);
         return ResponseEntity.ok(
                 new ApiResponse<>(true, "All sales record fetched successfully", response)
         );
@@ -93,10 +105,30 @@ public class SalesController {
         );
     }
 
+    // PERMANENT DELETE
+    @DeleteMapping("/{id}/permanent")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<String>> permanentDelete(@PathVariable Long id) {
+        tenantPlanGuardService.requireCurrentTenantPlanAccess(
+                TenantPlan.PRO,
+                "Trash restore is available on the Pro plan."
+        );
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String deletedBy = auth != null ? auth.getName() : "SYSTEM";
+        service.permanentDelete(id, deletedBy);
+        return ResponseEntity.ok(
+                new ApiResponse<>(true, "Sales record deleted permanently", null)
+        );
+    }
+
     // RESTORE
     @PutMapping("/{id}/restore")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<String>> restore(@PathVariable Long id) {
+        tenantPlanGuardService.requireCurrentTenantPlanAccess(
+                TenantPlan.PRO,
+                "Trash restore is available on the Pro plan."
+        );
         service.restore(id);
         return ResponseEntity.ok(
                 new ApiResponse<>(true, "Record restored", null)

@@ -7,11 +7,12 @@ import java.util.List;
 import java.util.Map;
 
 public interface FishHatchService {
-    List<FishHatchResponseDto> getAll();
+    List<FishHatchResponseDto> getAll(Boolean deleted);
     FishHatchResponseDto getById(Long id);
     FishHatchResponseDto create(FishHatchRequestDto request);
     FishHatchResponseDto update(Long id, FishHatchRequestDto request, String updateBy);
     void delete(Long id, String deletedBy);
+    void permanentDelete(Long id, String deletedBy);
     void restore(Long id);
     Map<String, Object> getSummary();
 }

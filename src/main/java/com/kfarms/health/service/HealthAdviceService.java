@@ -1,5 +1,6 @@
 package com.kfarms.health.service;
 
+import com.kfarms.health.dto.AdviceContext;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -14,6 +15,9 @@ import java.util.Map;
 @Service
 public class HealthAdviceService {
 
+    @Value("${kfarms.ai.enabled:false}")
+    private boolean aiEnabled;
+
     @Value("${openai.api.key}")
     private String apiKey;
 
@@ -23,17 +27,19 @@ public class HealthAdviceService {
     private static final String OPENAI_URL =
             "https://api.openai.com/v1/responses";
 
-    public List<String> generateAdvice(
-            String ruleTitle,
-            String contextNote,
-            String livestockType,
-            String season,
-            String predictionTag
-    ) {
+    public List<String> generateAdvice(AdviceContext context) {
+        if(!aiEnabled){
+            return ruleBasedAdvice(context);
+        }
 
-        System.out.println(">>> HealthAdviceService.generateAdvice() CALLED");
-        
+        try {
+            return aiAdvice(context);
+        }catch (Exception e) {
+            return ruleBasedAdvice(context);
+        }
+    }
 
+    private List<String> aiAdvice(AdviceContext context) {
         RestTemplate restTemplate = new RestTemplate();
 
 
@@ -45,14 +51,13 @@ public class HealthAdviceService {
                 Alert: %s
                 Livestock/Fish: %s
                 Season: %s
-                Prediction: %s
                 Context: %s
         
                 Give exactly 3 short, practical, actionable steps.
                 Keep advice suitable for small to medium farms.
                 Avoid technical jargon.
                 """
-                        .formatted(ruleTitle, livestockType, season, predictionTag, contextNote)
+                        .formatted(context.getRuleTitle(), context.getLivestockType(), context.getSeason(), context.getContextNote())
         );
 
         HttpHeaders headers = new HttpHeaders();
@@ -94,6 +99,79 @@ public class HealthAdviceService {
         }
 
 
+    }
+
+    private List<String> ruleBasedAdvice(AdviceContext context) {
+        return switch (context.getRuleCode()) {
+
+            // ================= WEATHER – POULTRY =================
+
+            case "HEAT_STRESS_POULTRY" -> List.of(
+                    "Increase access to clean, cool drinking water",
+                    "Improve airflow using fans or open ventilation",
+                    "Avoid handling birds during hot hours"
+            );
+
+            case "EXTREME_HEAT_POULTRY" -> List.of(
+                    "Sprinkle cool water around housing to reduce heat",
+                    "Provide emergency shade and strong ventilation",
+                    "Check birds frequently for signs of collapse"
+            );
+
+            case "COLD_STRESS_POULTRY" -> List.of(
+                    "Reduce drafts and close open gaps in housing",
+                    "Provide dry bedding and additional warmth",
+                    "Increase feed slightly to help birds generate heat"
+            );
+
+            case "HIGH_HUMIDITY_POULTRY" -> List.of(
+                    "Improve ventilation to reduce moisture buildup",
+                    "Replace wet litter immediately",
+                    "Clean drinkers to prevent bacterial growth"
+            );
+
+            // ================= WATER / FISH =================
+
+            case "LOW_OXYGEN_FISH" -> List.of(
+                    "Increase aeration immediately if available",
+                    "Stop feeding until oxygen levels improve",
+                    "Remove dead or weak fish promptly"
+            );
+
+            case "HIGH_WATER_TEMP_FISH" -> List.of(
+                    "Reduce feeding to lower oxygen demand",
+                    "Add fresh water gradually if possible",
+                    "Provide shade over ponds or tanks"
+            );
+
+            case "DIRTY_WATER_FISH" -> List.of(
+                    "Change part of the water carefully",
+                    "Remove leftover feed and waste",
+                    "Reduce feeding until water clears"
+            );
+
+            // ================= HEALTH / DISEASE =================
+
+            case "UNUSUAL_MORTALITY_POULTRY" -> List.of(
+                    "Isolate affected birds immediately",
+                    "Disinfect housing, feeders, and drinkers",
+                    "Observe remaining birds closely for symptoms"
+            );
+
+            case "UNUSUAL_MORTALITY_FISH" -> List.of(
+                    "Check water quality and oxygen levels",
+                    "Remove dead fish immediately",
+                    "Reduce feeding until the cause is identified"
+            );
+
+            // ================= FALLBACK =================
+
+            default -> List.of(
+                    "Ensure clean water is available",
+                    "Reduce stress on animals",
+                    "Monitor conditions closely"
+            );
+        };
     }
 
     private List<String> parseAdvice(String content) {

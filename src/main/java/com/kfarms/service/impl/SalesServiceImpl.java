@@ -11,6 +11,9 @@ import com.kfarms.repository.SalesRepository;
 import com.kfarms.service.InventoryService;
 import com.kfarms.service.NotificationService;
 import com.kfarms.service.SalesService;
+import com.kfarms.tenant.entity.Tenant;
+import com.kfarms.tenant.repository.TenantRepository;
+import com.kfarms.tenant.service.TenantContext;
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -33,42 +36,47 @@ public class SalesServiceImpl implements SalesService {
     private final SalesRepository salesRepo;
     private final InventoryService inventoryService;
     private final NotificationService notification;
+    private final TenantRepository tenantRepository;
 
 
     // CREATE - add a new sale item
     @Override
     public SalesResponseDto create(SalesRequestDto dto) {
+        Long tenantId = requireTenantId();
         Sales entity = SalesMapper.toEntity(dto);
+        entity.setTenant(resolveTenant(tenantId));
         Sales saved = salesRepo.save(entity);
-        // Auto update inventory if NOT LIVESTOCK
-        if (entity.getCategory() != SalesCategory.LIVESTOCK && entity.getCategory() != SalesCategory.FISH) {
-            inventoryService.adjustStock(
-                    entity.getItemName(),
-                    InventoryCategory.valueOf(entity.getCategory().name()),
-                    -entity.getQuantity(),
-                    "units",
-                    "Sold to " + (entity.getBuyer() != null ? entity.getBuyer() : "Walk-in customer")
-            );
-        }
         return SalesMapper.toResponseDto(saved);
     }
 
     // READ - get all sales with pagination & filters
     @Override
-    public Map<String, Object> getAll(int page, int size, String itemName, String category, LocalDate date) {
-        Pageable pageable = PageRequest.of(page, size, Sort.by("id").descending());
+    public Map<String, Object> getAll(int page, int size, String itemName, String category, LocalDate date, Boolean deleted) {
+        Long tenantId = requireTenantId();
+
+        Sort sort = Boolean.TRUE.equals(deleted)
+                ? Sort.by(Sort.Direction.DESC, "deletedAt")
+                .and(Sort.by(Sort.Direction.DESC, "id"))
+                : Sort.by(Sort.Direction.DESC, "id");
+
+        Pageable pageable = PageRequest.of(page, size, sort);
+
         Specification<Sales> spec = (root, query, cb) -> {
 
           List<Predicate> predicates = new ArrayList<>();
+          predicates.add(cb.equal(root.get("tenant").get("id"), tenantId));
+          if (deleted != null) {
+              predicates.add(cb.equal(root.get("deleted"), deleted));
+          }
 
-          if (itemName != null && !itemName.isBlank()) {
+            if (itemName != null && !itemName.isBlank()) {
               predicates.add(cb.like(cb.lower(root.get("itemName")), "%" + itemName.toLowerCase() + "%"));
           }
           if (category != null && !category.isBlank()) {
               predicates.add(cb.like(cb.lower(root.get("category")), "%" + category.toLowerCase() + "%"));
           }
           if (date != null) {
-              predicates.add(cb.equal(root.get("date"), date));
+              predicates.add(cb.equal(root.get("salesDate"), date));
           }
           return cb.and(predicates.toArray(new Predicate[0]));
         };
@@ -95,7 +103,8 @@ public class SalesServiceImpl implements SalesService {
     // READ - get sale item by ID
     @Override
     public SalesResponseDto getById(Long id) {
-        Sales entity = salesRepo.findById(id)
+        Long tenantId = requireTenantId();
+        Sales entity = salesRepo.findByIdAndTenant_Id(id, tenantId)
                 .filter(s -> !Boolean.TRUE.equals(s.getDeleted()))
                 .orElseThrow(() -> new ResourceNotFoundException("Sales", "id", id));
 
@@ -105,7 +114,8 @@ public class SalesServiceImpl implements SalesService {
     // UPDATE - update existing sales item by ID
     @Override
     public SalesResponseDto update(Long id, SalesRequestDto request, String updatedBy) {
-        Sales entity = salesRepo.findById(id)
+        Long tenantId = requireTenantId();
+        Sales entity = salesRepo.findByIdAndTenant_Id(id, tenantId)
                 .filter(s -> !Boolean.TRUE.equals(s.getDeleted()))
                 .orElseThrow(() -> new ResourceNotFoundException("Sales", "id", id));
 
@@ -114,6 +124,9 @@ public class SalesServiceImpl implements SalesService {
         entity.setQuantity(request.getQuantity());
         entity.setUnitPrice(request.getUnitPrice());
         entity.setBuyer(request.getBuyer());
+        entity.setNote(request.getNote());
+        entity.setSalesDate(request.getSalesDate() != null ? request.getSalesDate() : entity.getSalesDate());
+        entity.setTotalPrice(calculateTotalPrice(request.getQuantity(), request.getUnitPrice()));
         entity.setUpdatedBy(updatedBy);
 
         salesRepo.save(entity);
@@ -123,7 +136,8 @@ public class SalesServiceImpl implements SalesService {
     // DELETE - delete sales item by ID
     @Override
     public void delete(Long id, String deletedBy) {
-        Sales entity = salesRepo.findById(id)
+        Long tenantId = requireTenantId();
+        Sales entity = salesRepo.findByIdAndTenant_Id(id, tenantId)
                 .orElseThrow(() -> new ResourceNotFoundException("Sales", "id", id));
 
         if (Boolean.TRUE.equals(entity.getDeleted())) {
@@ -136,10 +150,20 @@ public class SalesServiceImpl implements SalesService {
         salesRepo.save(entity);
     }
 
+    // DELETE (permanent)
+    @Override
+    public void permanentDelete(Long id, String deletedBy) {
+        Long tenantId = requireTenantId();
+        Sales entity = salesRepo.findByIdAndTenant_Id(id, tenantId)
+                .orElseThrow(() -> new ResourceNotFoundException("Sales", "id", id));
+        salesRepo.delete(entity);
+    }
+
     // RESTORE
     @Override
     public void restore(Long id) {
-        Sales entity = salesRepo.findById(id)
+        Long tenantId = requireTenantId();
+        Sales entity = salesRepo.findByIdAndTenant_Id(id, tenantId)
                 .orElseThrow(() -> new ResourceNotFoundException("Sales", "id", id));
 
         if (!Boolean.TRUE.equals(entity.getDeleted())) {
@@ -155,77 +179,100 @@ public class SalesServiceImpl implements SalesService {
     @Override
     public Map<String, Object> getSummary() {
 
-        List<Sales> all = salesRepo.findAll()
-                .stream()
-                .filter(s -> !Boolean.TRUE.equals(s.getDeleted()))
-                .toList();
+        Long tenantId = TenantContext.getTenantId();
+
+        List<Sales> all = salesRepo.findAllActiveByTenantId(tenantId);
 
         Map<String, Object> summary = new HashMap<>();
+
+        LocalDate today = LocalDate.now();
+        LocalDate lastMonth = today.minusMonths(1);
+        LocalDate sevenDaysAgo = today.minusDays(7);
 
         // 🟣 Total sales record
         summary.put("totalSalesRecords", all.size());
 
-        // 🟣 Total revenue
-        BigDecimal totalRevenue = all.stream()
+        /* 🟣 All-time revenue */
+        BigDecimal totalRevenueAllTime = all.stream()
                 .map(Sales::getTotalPrice)
                 .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        summary.put("totalRevenue", totalRevenue);
+        summary.put("totalRevenue", totalRevenueAllTime);
 
-        // 🟣 Total count by category
-        Map<String, Long> countByCategory = all.stream()
-                        .filter(s -> s.getCategory() != null)
-                                .collect(Collectors.groupingBy(
-                                        s -> s.getCategory().name(),
-                                        Collectors.counting()
-                                ));
-        summary.put("countByCategory", countByCategory);
-
-        // 🟣 Revenue by category
-        Map<String, BigDecimal> revenueByCategory = all.stream()
-                        .filter(s -> s.getCategory() != null)
-                                .collect(Collectors.groupingBy(
-                                        s -> s.getCategory().name(),
-                                        Collectors.reducing(BigDecimal.ZERO,
-                                                Sales::getTotalPrice,
-                                                BigDecimal::add)
-                                ));
-        summary.put("revenueByCategory", revenueByCategory);
-
-        // 🟣 Annual revenue
-        BigDecimal revenueThisYear = all.stream()
-                .filter(s -> s.getSalesDate() != null && s.getSalesDate().getYear() == (LocalDate.now().getYear()))
+        /* 🟣 Revenue today */
+        BigDecimal revenueToday = all.stream()
+                .filter(s -> s.getSalesDate() != null &&
+                        s.getSalesDate().isEqual(today))
                 .map(Sales::getTotalPrice)
                 .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        summary.put("revenueThisYear", revenueThisYear);
+        summary.put("revenueToday", revenueToday);
 
-
-        // 🟣 Monthly revenue
+        /* 🟣 Revenue this month */
         BigDecimal revenueThisMonth = all.stream()
                 .filter(s -> s.getSalesDate() != null &&
-                             s.getSalesDate().getMonth() == LocalDate.now().getMonth() &&
-                             s.getSalesDate().getYear() == LocalDate.now().getYear())
+                        s.getSalesDate().getMonth() == today.getMonth() &&
+                        s.getSalesDate().getYear() == today.getYear())
                 .map(Sales::getTotalPrice)
                 .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         summary.put("revenueThisMonth", revenueThisMonth);
 
-        // 🟣 Revenue last month (for comparison)
-        LocalDate lastMonth = LocalDate.now().minusMonths(1);
+        /* 🟣 Revenue this year (ANNUAL) */
+        BigDecimal revenueThisYear = all.stream()
+                .filter(s -> s.getSalesDate() != null &&
+                        s.getSalesDate().getYear() == today.getYear())
+                .map(Sales::getTotalPrice)
+                .filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        summary.put("revenueThisYear", revenueThisYear);
+
+        /* 🟣 Revenue last month */
         BigDecimal revenueLastMonth = all.stream()
                 .filter(s -> s.getSalesDate() != null &&
-                                s.getSalesDate().getMonth() == LocalDate.now().getMonth() &&
-                                s.getSalesDate().getYear() == LocalDate.now().getYear())
+                        s.getSalesDate().getMonth() == lastMonth.getMonth() &&
+                        s.getSalesDate().getYear() == lastMonth.getYear())
                 .map(Sales::getTotalPrice)
                 .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         summary.put("revenueLastMonth", revenueLastMonth);
 
+        /* 🟣 Count by category */
+        Map<String, Long> countByCategory = all.stream()
+                .filter(s -> s.getCategory() != null)
+                .collect(Collectors.groupingBy(
+                        s -> s.getCategory().name(),
+                        Collectors.counting()
+                ));
+
+        /* 🟣 Revenue by category */
+        Map<String, BigDecimal> revenueByCategory = all.stream()
+                .filter(s -> s.getCategory() != null)
+                .collect(Collectors.groupingBy(
+                        s -> s.getCategory().name(),
+                        Collectors.reducing(
+                                BigDecimal.ZERO,
+                                Sales::getTotalPrice,
+                                BigDecimal::add
+                        )
+                ));
+        summary.put("revenueByCategory", revenueByCategory);
+
+        /* 🟣 Last sales date */
+        all.stream()
+                .map(Sales::getSalesDate)
+                .filter(Objects::nonNull)
+                .max(LocalDate::compareTo)
+                .ifPresent(d -> summary.put("lastSalesDate", d));
+
+
+
+
         // 🟣 Compare and Notify if there’s a drop
         if (revenueLastMonth.compareTo(BigDecimal.ZERO) > 0 &&
         revenueThisMonth.compareTo(revenueLastMonth) < 0) {
             notification.createNotification(
+                    tenantId,
                     "FINANCE",
                     "Revenue Drop Alert",
                     "This month's revenue (" + revenueThisMonth + ") is lower than last month " + revenueLastMonth + ").",
@@ -233,27 +280,40 @@ public class SalesServiceImpl implements SalesService {
             );
         }
 
-        // 🟣 No sales in the past 7 days
-        LocalDate sevenDaysAgo = LocalDate.now().minusDays(7);
-        boolean noSales = all.stream()
-                .noneMatch(s -> s.getSalesDate() != null && s.getSalesDate().isAfter(sevenDaysAgo));
+        // No sales in last 7 days
+        boolean noSalesLast7Days = all.stream()
+                .noneMatch(s -> s.getSalesDate() != null &&
+                        !s.getSalesDate().isBefore(sevenDaysAgo));
 
-        if (noSales) {
+        if (noSalesLast7Days) {
             notification.createNotification(
+                    tenantId,
                     "FINANCE",
                     "No Sales Activity",
                     "No sales have been recorded in the last 7 days.",
                     null
             );
         }
-
-        // 🟣 Last Sales Date
-        all.stream()
-                .map(Sales::getSalesDate)
-                .filter(Objects::nonNull)
-                .max(LocalDate::compareTo)
-                .ifPresent(last -> summary.put("lastSalesDate", last));
-
         return summary;
+    }
+
+    private BigDecimal calculateTotalPrice(Integer quantity, BigDecimal unitPrice) {
+        if (quantity == null || unitPrice == null) {
+            return BigDecimal.ZERO;
+        }
+        return unitPrice.multiply(BigDecimal.valueOf(quantity.longValue()));
+    }
+
+    private Long requireTenantId() {
+        Long tenantId = TenantContext.getTenantId();
+        if (tenantId == null) {
+            throw new IllegalStateException("Missing tenant context");
+        }
+        return tenantId;
+    }
+
+    private Tenant resolveTenant(Long tenantId) {
+        return tenantRepository.findById(tenantId)
+                .orElseThrow(() -> new ResourceNotFoundException("Tenant", "id", tenantId));
     }
 }

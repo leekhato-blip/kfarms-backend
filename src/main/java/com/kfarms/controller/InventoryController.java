@@ -1,13 +1,14 @@
 package com.kfarms.controller;
 
+import com.kfarms.dto.InventoryAdjustmentRequestDto;
 import com.kfarms.dto.InventoryRequestDto;
 import com.kfarms.dto.InventoryResponseDto;
 import com.kfarms.entity.ApiResponse;
-import com.kfarms.entity.Inventory;
 import com.kfarms.entity.InventoryCategory;
 import com.kfarms.service.InventoryService;
+import com.kfarms.tenant.entity.TenantPlan;
+import com.kfarms.tenant.service.TenantPlanGuardService;
 import jakarta.validation.Valid;
-import org.apache.coyote.Response;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -26,8 +27,11 @@ import java.util.Optional;
 public class InventoryController {
 
     private final InventoryService service;
-    public InventoryController(InventoryService service){
+    private final TenantPlanGuardService tenantPlanGuardService;
+
+    public InventoryController(InventoryService service, TenantPlanGuardService tenantPlanGuardService){
         this.service = service;
+        this.tenantPlanGuardService = tenantPlanGuardService;
     }
 
     // CREATE - add new inventory item
@@ -36,7 +40,7 @@ public class InventoryController {
     public ResponseEntity<ApiResponse<InventoryResponseDto>> create(
             @Valid @RequestBody InventoryRequestDto dto) {
         InventoryResponseDto saved = service.create(dto);
-        return ResponseEntity.ok(
+        return ResponseEntity.status(HttpStatus.CREATED).body(
                 new ApiResponse<>(true, "Inventory record saved successfully", saved)
         );
     }
@@ -49,9 +53,17 @@ public class InventoryController {
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(required = false) String itemName,
             @RequestParam(required = false) String category,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false, defaultValue = "false") Boolean deleted,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate lastUpdated
             ){
-        Map<String, Object> response = service.getAll(page, size, itemName, category, lastUpdated);
+        if (Boolean.TRUE.equals(deleted)) {
+            tenantPlanGuardService.requireCurrentTenantPlanAccess(
+                    TenantPlan.PRO,
+                    "Trash restore is available on the Pro plan."
+            );
+        }
+        Map<String, Object> response = service.getAll(page, size, itemName, category, status, lastUpdated, deleted);
         return ResponseEntity.ok(
                 new ApiResponse<>(true, "All inventory fetched successfully", response)
         );
@@ -77,7 +89,7 @@ public class InventoryController {
     @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
     public ResponseEntity<ApiResponse<InventoryResponseDto>> udpate(
             @PathVariable Long id,
-            @RequestBody InventoryRequestDto request
+            @Valid @RequestBody InventoryRequestDto request
     ) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String updatedBy = auth.getName();
@@ -91,6 +103,10 @@ public class InventoryController {
     @GetMapping("/watchlist")
     @PreAuthorize("hasAnyRole('ADMIN','MANAGER','STAFF')")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> feedWatchlist() {
+        tenantPlanGuardService.requireCurrentTenantPlanAccess(
+                TenantPlan.PRO,
+                "Feed watchlists are available on the Pro plan."
+        );
         List<Map<String, Object>> watchlist = service.getLowFeedItems();
         return ResponseEntity.ok(new ApiResponse<>(true, "Low feed items fetched", watchlist));
     }
@@ -108,10 +124,29 @@ public class InventoryController {
         );
     }
 
+    @DeleteMapping("/{id}/permanent")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<String>> permanentDelete(@PathVariable Long id) {
+        tenantPlanGuardService.requireCurrentTenantPlanAccess(
+                TenantPlan.PRO,
+                "Trash restore is available on the Pro plan."
+        );
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String deletedBy = auth != null ? auth.getName() : "SYSTEM";
+        service.permanentDelete(id, deletedBy);
+        return ResponseEntity.ok(
+                new ApiResponse<>(true, "Inventory record deleted permanently", null)
+        );
+    }
+
     // RETORE
     @PutMapping("/{id}/restore")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<String>> restore(@PathVariable Long id) {
+        tenantPlanGuardService.requireCurrentTenantPlanAccess(
+                TenantPlan.PRO,
+                "Trash restore is available on the Pro plan."
+        );
         service.restore(id);
         return ResponseEntity.ok(
                 new ApiResponse<>(true, "Inventory record restored", null)
@@ -127,6 +162,23 @@ public class InventoryController {
         return ResponseEntity.ok(
                 new ApiResponse<>(true, "Inventory summary fetched", summary)
         );
+    }
+
+    @PostMapping("/{id}/adjust")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
+    public ResponseEntity<ApiResponse<InventoryResponseDto>> adjustStock(
+            @PathVariable Long id,
+            @Valid @RequestBody InventoryAdjustmentRequestDto request
+    ) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String updatedBy = auth != null ? auth.getName() : "SYSTEM";
+        InventoryResponseDto response = service.adjustStockById(
+                id,
+                request.getQuantityChange(),
+                request.getNote(),
+                updatedBy
+        );
+        return ResponseEntity.ok(new ApiResponse<>(true, "Inventory stock adjusted successfully", response));
     }
 
     // GET /api/inventory/catalog/items?category=FEED

@@ -1,6 +1,7 @@
 package com.kfarms.dto;
 
 import com.kfarms.entity.LivestockType;
+import com.kfarms.entity.PoultryKeepingMethod;
 import com.kfarms.entity.SourceType;
 import lombok.Data;
 
@@ -19,6 +20,7 @@ public class LivestockResponseDto {
     private int startingAgeInWeeks;
     private int ageInWeeks; // derived, not stored
     private Integer mortality;
+    private PoultryKeepingMethod keepingMethod;
 
     private String note;
 

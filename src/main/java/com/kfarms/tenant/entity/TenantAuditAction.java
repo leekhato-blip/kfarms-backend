@@ -1,0 +1,11 @@
+package com.kfarms.tenant.entity;
+
+public enum TenantAuditAction {
+    INVITATION_CREATED,
+    INVITATION_REVOKED,
+    INVITATION_ACCEPTED,
+    MEMBER_ROLE_CHANGED,
+    MEMBER_ACTIVATED,
+    MEMBER_DEACTIVATED,
+    MEMBER_REMOVED
+}

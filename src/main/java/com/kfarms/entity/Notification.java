@@ -1,6 +1,8 @@
 package com.kfarms.entity;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.kfarms.tenant.entity.Tenant;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -25,11 +27,19 @@ public class Notification {
 
     private Boolean read = false;
 
+    @Builder.Default
+    @Column(nullable = false)
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime createdAt = LocalDateTime.now();
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id")
+    @JsonIgnore
     private AppUser user;
+
+    @ManyToOne(optional = false)
+    @JoinColumn(name = "tenant_id", nullable = false)
+    private Tenant tenant;
+
 
 }

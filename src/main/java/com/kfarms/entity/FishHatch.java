@@ -1,5 +1,6 @@
 package com.kfarms.entity;
 
+import com.kfarms.tenant.entity.Tenant;
 import jakarta.persistence.*;
 import lombok.*;
 import org.apache.catalina.users.GenericRole;
@@ -28,4 +29,8 @@ public class FishHatch extends Auditable{
     private double hatchRate;
     private int quantityHatched;
     private String note;
+
+    @ManyToOne(optional = false)
+    @JoinColumn(name = "tenant_id", nullable = false)
+    private Tenant tenant;
 }

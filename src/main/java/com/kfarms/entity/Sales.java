@@ -1,11 +1,13 @@
 package com.kfarms.entity;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.kfarms.tenant.entity.Tenant;
 import jakarta.persistence.*;
 import lombok.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 // SALES/DISTRIBUTIONS
 @Data
@@ -36,5 +38,11 @@ public class Sales extends Auditable {
     private String note; // nullable - returns null if not provided
     private String buyer; // nullable - returns "Walk-in customer" if not provided
 
+    @JsonFormat(pattern = "yyyy-MM-dd")
     private LocalDate salesDate = LocalDate.now(); // default today
+
+    @ManyToOne(optional = false)
+    @JoinColumn(name = "tenant_id", nullable = false)
+    private Tenant tenant;
+
 }

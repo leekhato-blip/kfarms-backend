@@ -1,5 +1,6 @@
 package com.kfarms.entity;
 
+import com.kfarms.tenant.entity.Tenant;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -7,9 +8,12 @@ import java.time.LocalDate;
 
 @Entity
 @Table(
-        name = "FishPond",
+        name = "fish_pond",
         uniqueConstraints = {
-                @UniqueConstraint(columnNames = {"pondName"})
+                @UniqueConstraint(
+                        name = "uk_fish_pond_tenant_name",
+                        columnNames = {"tenant_id", "pond_name"}
+                )
         }
 )
 @Data
@@ -19,7 +23,7 @@ public class FishPond extends Auditable{
     @Id
     @GeneratedValue private Long id;
 
-    @Column(nullable = false, unique = true)
+    @Column(nullable = false)
     private String pondName;  // e.g. "Pond 1"
 
     @Column(nullable = false)
@@ -40,7 +44,7 @@ public class FishPond extends Auditable{
     private FishPondStatus status = FishPondStatus.ACTIVE; // ACTIVE, EMPTY, MAINTENANCE - defaults to ACTIVE
 
     // LOCATION
-    private FishPondLocation pondLocation;
+    private FishPondLocation pondLocation = FishPondLocation.FARM;
 
     // DATES
     private LocalDate dateStocked = LocalDate.now(); // when fish were added
@@ -72,5 +76,9 @@ public class FishPond extends Auditable{
             default -> throw new IllegalArgumentException("Unknown stock adjustment reason: " + reason);
         }
     }
+
+    @ManyToOne(optional = false)
+    @JoinColumn(name = "tenant_id", nullable = false)
+    private Tenant tenant;
 
 }

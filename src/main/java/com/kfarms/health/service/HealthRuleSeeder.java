@@ -29,28 +29,28 @@ public class HealthRuleSeeder {
                         HealthRuleCategory.WEATHER,
                         HealthSeverity.WARNING,
                         "High temperature may stress poultry and reduce feed intake",
-                        2),
+                        12),
 
                 rule("EXTREME_HEAT_POULTRY",
                         "Extreme Heat Alert",
                         HealthRuleCategory.WEATHER,
                         HealthSeverity.CRITICAL,
                         "Extreme heat can cause sudden poultry deaths",
-                        4),
+                        12),
 
                 rule("COLD_STRESS_POULTRY",
                         "Cold Stress Warning",
                         HealthRuleCategory.WEATHER,
                         HealthSeverity.WARNING,
                         "Low temperature weakens poultry immunity",
-                        6),
+                        24),
 
                 rule("HIGH_HUMIDITY_POULTRY",
                         "High Humidity Risk",
                         HealthRuleCategory.WEATHER,
                         HealthSeverity.WARNING,
                         "High humidity increases disease risk and poor ventilation",
-                        3),
+                        24),
 
                 // ================= WATER / FISH =================
                 rule("LOW_OXYGEN_FISH",
@@ -58,37 +58,36 @@ public class HealthRuleSeeder {
                         HealthRuleCategory.WATER,
                         HealthSeverity.CRITICAL,
                         "Low oxygen levels may suffocate fish",
-                        1),
+                        24),
 
                 rule("HIGH_WATER_TEMP_FISH",
                         "High Water Temperature",
                         HealthRuleCategory.WATER,
                         HealthSeverity.WARNING,
                         "Warm water reduces oxygen availability for fish",
-                        2),
+                        24),
 
                 rule("DIRTY_WATER_FISH",
                         "Poor Water Quality",
                         HealthRuleCategory.WATER,
                         HealthSeverity.WARNING,
                         "Dirty water can cause fish disease and slow growth",
-                        4),
+                        24),
 
                 // ================= POULTRY HEALTH =================
-
                 rule("UNUSUAL_MORTALITY_POULTRY",
                         "Unusual Mortality Alert",
                         HealthRuleCategory.HEALTH,
                         HealthSeverity.CRITICAL,
                         "Sudden deaths detected in poultry stock",
-                        12),
+                        24),
 
                 rule("UNUSUAL_MORTALITY_FISH",
                         "Unusual Fish Mortality Alert",
                         HealthRuleCategory.DISEASE,
                         HealthSeverity.CRITICAL,
                         "Sudden or abnormal fish deaths detected in pond",
-                        6)
+                        12)
 
 
         ));

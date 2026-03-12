@@ -4,6 +4,8 @@ import com.kfarms.dto.FishHatchRequestDto;
 import com.kfarms.dto.FishHatchResponseDto;
 import com.kfarms.entity.ApiResponse;
 import com.kfarms.service.FishHatchService;
+import com.kfarms.tenant.entity.TenantPlan;
+import com.kfarms.tenant.service.TenantPlanGuardService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -19,15 +21,26 @@ import java.util.Map;
 @RequestMapping("/api/fish-hatch")
 public class FishHatchController {
     private final FishHatchService service;
-    public FishHatchController(FishHatchService service){
+    private final TenantPlanGuardService tenantPlanGuardService;
+
+    public FishHatchController(FishHatchService service, TenantPlanGuardService tenantPlanGuardService){
         this.service = service;
+        this.tenantPlanGuardService = tenantPlanGuardService;
     }
 
-    // CREATE - create a new fishHatc record
+    private void requireProPlan() {
+        tenantPlanGuardService.requireCurrentTenantPlanAccess(
+                TenantPlan.PRO,
+                "Hatch workflows are available on the Pro plan."
+        );
+    }
+
+    // CREATE - create a new fishHatch record
     @PostMapping
     @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
     public ResponseEntity<ApiResponse<FishHatchResponseDto>> create(
             @Valid @RequestBody FishHatchRequestDto request){
+        requireProPlan();
         FishHatchResponseDto dto = service.create(request);
         return ResponseEntity.ok(
                 new ApiResponse<>(true, "Fish hatch record created", dto)
@@ -37,8 +50,11 @@ public class FishHatchController {
     // READ - fetch all fish hatch records
     @GetMapping
     @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER') or hasRole('STAFF')")
-    public ResponseEntity<ApiResponse<List<FishHatchResponseDto>>> getAll(){
-        List<FishHatchResponseDto>  list = service.getAll();
+    public ResponseEntity<ApiResponse<List<FishHatchResponseDto>>> getAll(
+            @RequestParam(required = false, defaultValue = "false") Boolean deleted
+    ){
+        requireProPlan();
+        List<FishHatchResponseDto>  list = service.getAll(deleted);
         return ResponseEntity.ok(
                 new ApiResponse<>(true, "All hatch records fetched", list)
         );
@@ -48,6 +64,7 @@ public class FishHatchController {
     @GetMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER') or hasRole('STAFF')")
     public ResponseEntity<ApiResponse<FishHatchResponseDto>> getById(@PathVariable Long id) {
+        requireProPlan();
         FishHatchResponseDto dto = service.getById(id);
         return ResponseEntity.ok(
                 new ApiResponse<>(true, "Fish hatch record fetched", dto)
@@ -61,6 +78,7 @@ public class FishHatchController {
             @PathVariable Long id,
             @RequestBody FishHatchRequestDto request
     ) {
+        requireProPlan();
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String updatedBy = auth != null ? auth.getName() : "SYSTEM";
         FishHatchResponseDto dto = service.update(id, request, updatedBy);
@@ -73,6 +91,7 @@ public class FishHatchController {
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<String>> delete(@PathVariable Long id){
+        requireProPlan();
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String deletedBy = auth != null ? auth.getName() : "SYSTEM";
         service.delete(id, deletedBy);
@@ -81,11 +100,25 @@ public class FishHatchController {
         );
     }
 
+    // PERMANENT DELETE
+    @DeleteMapping("/{id}/permanent")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<String>> permanentDelete(@PathVariable Long id) {
+        requireProPlan();
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String deletedBy = auth != null ? auth.getName() : "SYSTEM";
+        service.permanentDelete(id, deletedBy);
+        return ResponseEntity.ok(
+                new ApiResponse<>(true, "Fish hatch record deleted permanently", null)
+        );
+    }
+
     // RESTORE
     // DELETE - delete existing fish hatch record
     @PutMapping("/{id}/restore")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<String>> restore(@PathVariable Long id) {
+        requireProPlan();
         service.restore(id);
         return ResponseEntity.ok(
                 new ApiResponse<>(true, "Fish hatch record restored", null)
@@ -96,6 +129,7 @@ public class FishHatchController {
     @GetMapping("/summary")
     @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
     public ResponseEntity<ApiResponse<Map<String, Object>>> summary() {
+        requireProPlan();
         Map<String, Object> summary = service.getSummary();
         return ResponseEntity.ok(
                 new ApiResponse<>(true, "Fish hatch summary fetched", summary)

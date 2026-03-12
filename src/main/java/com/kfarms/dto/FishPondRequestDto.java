@@ -35,10 +35,10 @@ public class FishPondRequestDto {
     @Size(max = 100, message = "Pond location cannot exceed 100 characters")
     private String pondLocation;
 
-    @PastOrPresent(message = "Date stocked cannot be in the future")
+//    @PastOrPresent(message = "Date stocked cannot be in the future")
     private LocalDate dateStocked;
 
-    @PastOrPresent(message = "Last water change cannot be in the future")
+//    @PastOrPresent(message = "Last water change cannot be in the future")
     private LocalDate lastWaterChange;
 
     @Size(max = 255, message = "Note cannot exceed 255 characters")

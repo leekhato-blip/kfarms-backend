@@ -11,7 +11,7 @@ public class FishHatchRequestDto {
     private Long pondId;
 
     @NotNull(message = "Hatch date is required")
-    @PastOrPresent(message = "Hatch date cannot be in the future")
+//    @PastOrPresent(message = "Hatch date cannot be in the future")
     private LocalDate hatchDate;
 
     @Min(value = 0, message = "Male count cannot be negative")

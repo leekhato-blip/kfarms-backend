@@ -6,6 +6,8 @@ import com.kfarms.dto.TaskResponseDto;
 import com.kfarms.entity.ApiResponse;
 import com.kfarms.entity.Task;
 import com.kfarms.service.impl.TaskService;
+import com.kfarms.tenant.entity.TenantPlan;
+import com.kfarms.tenant.service.TenantPlanGuardService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -19,9 +21,11 @@ import java.util.stream.Collectors;
 public class TaskController {
 
     private final TaskService service;
+    private final TenantPlanGuardService planGuardService;
 
     @GetMapping("/upcoming")
     public ResponseEntity<ApiResponse<List<TaskResponseDto>>> upcoming(@RequestParam(value = "limit", defaultValue = "4") int limit) {
+        requireTaskPlanningAccess();
         var tasks = service.getUpcoming(limit);
         var response = tasks.stream().map(this::toDto).collect(Collectors.toList());
         return ResponseEntity.ok(
@@ -31,6 +35,7 @@ public class TaskController {
 
     @GetMapping
     public ResponseEntity<ApiResponse<List<TaskResponseDto>>> allPending() {
+        requireTaskPlanningAccess();
         var tasks = service.getAllPending();
         var response = tasks.stream().map(this::toDto).collect(Collectors.toList());
         return ResponseEntity.ok(
@@ -40,6 +45,7 @@ public class TaskController {
 
     @PostMapping
     public ResponseEntity<ApiResponse<TaskResponseDto>> create(@RequestBody TaskRequestDto request) {
+        requireTaskPlanningAccess();
         Task task = fromReq(request);
         Task saved = service.create(task);
         return ResponseEntity.ok(
@@ -49,6 +55,7 @@ public class TaskController {
 
     @PutMapping("/{id}")
     public ResponseEntity<ApiResponse<TaskResponseDto>> update(@PathVariable Long id, @RequestBody TaskRequestDto request) {
+        requireTaskPlanningAccess();
         Task t = fromReq(request);
         Task updated = service.update(id, t);
         if (updated == null) return ResponseEntity.badRequest().body(new ApiResponse<>(false, "Task not found", null));
@@ -59,6 +66,7 @@ public class TaskController {
 
     @DeleteMapping("/{id}")
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
+        requireTaskPlanningAccess();
         boolean ok = service.delete(id);
         if (!ok) return ResponseEntity
                 .badRequest()
@@ -70,6 +78,7 @@ public class TaskController {
 
     @PatchMapping("/{id}/complete")
     public ResponseEntity<ApiResponse<TaskResponseDto>> complete(@PathVariable Long id) {
+        requireTaskPlanningAccess();
         Task task = service.markComplete(id);
         if (task == null) return ResponseEntity
                 .badRequest()
@@ -109,5 +118,12 @@ public class TaskController {
         t.setRelatedEntityType(r.getRelatedEntityType());
         t.setRelatedEntityId(r.getRelatedEntityId());
         return t;
+    }
+
+    private void requireTaskPlanningAccess() {
+        planGuardService.requireCurrentTenantPlanAccess(
+                TenantPlan.PRO,
+                "Task planning is available on Pro and Enterprise plans."
+        );
     }
 }

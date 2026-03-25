@@ -3,6 +3,7 @@ package com.kfarms.reports;
 import com.lowagie.text.*;
 import com.lowagie.text.Font;
 import com.lowagie.text.pdf.*;
+import lombok.extern.slf4j.Slf4j;
 
 import java.awt.*;
 import java.io.ByteArrayOutputStream;
@@ -11,6 +12,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
+@Slf4j
 public class PdfReportBuilder {
 
     private static final Color KFARMS_PURPLE = new Color(107, 70, 193); // 💜 Purple
@@ -62,10 +64,10 @@ public class PdfReportBuilder {
             Font cellFont = new Font(base, 11, Font.NORMAL, Color.BLACK);
             Font footerFont = new Font(base, 9, Font.ITALIC, Color.GRAY);
 
-            // ✅ DEBUG LOGS
-            System.out.println("📄 Building PDF report for: " + title);
-            System.out.println("Headers: " + headers);
-            System.out.println("Records: " + (dataList != null ? dataList.size() : 0));
+            log.debug("Building PDF report '{}' with {} header(s) and {} record(s)",
+                    title,
+                    headers.size(),
+                    dataList != null ? dataList.size() : 0);
 
             // ---------- TITLE ----------
             String resolvedTitle = organizationName.isBlank() ? title : organizationName + " • " + title;
@@ -135,8 +137,7 @@ public class PdfReportBuilder {
             document.add(footer);
 
         } catch (Exception e) {
-            System.err.println("❌ PDF generation failed: " + e.getMessage());
-            e.printStackTrace();
+            log.error("PDF generation failed for '{}'", title, e);
             throw e;
         } finally {
             if (document != null && document.isOpen()) {

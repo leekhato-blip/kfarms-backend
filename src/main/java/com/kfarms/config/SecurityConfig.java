@@ -19,10 +19,12 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.util.StringUtils;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import com.kfarms.tenant.service.TenantMembershipFilter;
+import lombok.RequiredArgsConstructor;
 
 
 import java.util.List;
@@ -30,7 +32,10 @@ import java.util.List;
 @Configuration
 @EnableWebSecurity // Enables Spring Security for the Farm app
 @EnableMethodSecurity
+@RequiredArgsConstructor
 public class SecurityConfig {
+
+    private final KfarmsCorsProperties corsProperties;
 
     @Bean
     public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
@@ -58,13 +63,15 @@ public class SecurityConfig {
 
                                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                                 .requestMatchers("/auth/**", "/api/auth/**").permitAll()
+                                .requestMatchers("/error", "/error/**").permitAll()
                                 .requestMatchers("/api/billing/paystack/webhook").permitAll()
+                                .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info").permitAll()
 
                                 // tenant bootstrap endpoints (no tenant header required)
                                 .requestMatchers("/api/tenants/**").authenticated()
 
                                 // ROOTS platform endpoints (global admin only)
-                                .requestMatchers("/platform/**").hasRole("PLATFORM_ADMIN")
+                                .requestMatchers("/api/platform/**").hasRole("PLATFORM_ADMIN")
 
                                 // everything else requires login (tenant filters + membership filter will enforce roles)
                                 .anyRequest().authenticated()
@@ -90,14 +97,25 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource(){
         CorsConfiguration config = new CorsConfiguration();
         config.setAllowCredentials(true);
-        config.setAllowedOrigins(List.of("http://localhost:5173",  "http://127.0.0.1:5173"));
-        config.setAllowedMethods(List.of("GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"));
-        config.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Tenant-Id"));
-        config.setExposedHeaders(List.of("Set-Cookie"));
+        config.setAllowedOrigins(sanitize(corsProperties.getAllowedOrigins()));
+        config.setAllowedOriginPatterns(sanitize(corsProperties.getAllowedOriginPatterns()));
+        config.setAllowedMethods(sanitize(corsProperties.getAllowedMethods()));
+        config.setAllowedHeaders(sanitize(corsProperties.getAllowedHeaders()));
+        config.setExposedHeaders(sanitize(corsProperties.getExposedHeaders()));
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);
 
         return source;
     }
+
+    private List<String> sanitize(List<String> values) {
+        return values == null
+                ? List.of()
+                : values.stream()
+                .map(value -> value == null ? "" : value.trim())
+                .filter(StringUtils::hasText)
+                .distinct()
+                .toList();
     }
+}

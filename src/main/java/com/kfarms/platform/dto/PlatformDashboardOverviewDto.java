@@ -11,6 +11,9 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class PlatformDashboardOverviewDto {
 
+    private long totalApps;
+    private long liveApps;
+    private long plannedApps;
     private long totalTenants;
     private long activeTenants;
     private long suspendedTenants;

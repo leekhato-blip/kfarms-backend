@@ -3,6 +3,7 @@ package com.kfarms.tenant.controller;
 import com.kfarms.entity.ApiResponse;
 import com.kfarms.entity.AppUser;
 import com.kfarms.repository.AppUserRepository;
+import com.kfarms.security.UserHierarchyPolicy;
 import com.kfarms.tenant.entity.*;
 import com.kfarms.tenant.repository.InvitationRepository;
 import com.kfarms.tenant.repository.TenantMemberRepository;
@@ -62,7 +63,6 @@ public class TenantController {
             Authentication auth
     ) {
         String principal = auth.getName();
-        System.out.println("AUTH NAME: " + auth.getName());
 
         AppUser user = userRepo.findByUsername(principal)
                 .or(() -> userRepo.findByEmail(principal))
@@ -111,7 +111,6 @@ public class TenantController {
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> myTenants(Authentication auth) {
         String principal = auth.getName();
-        System.out.println("AUTH NAME: " + auth.getName());
 
         AppUser user = userRepo.findByUsername(principal)
                 .or(() -> userRepo.findByEmail(principal))
@@ -137,7 +136,6 @@ public class TenantController {
             Authentication auth
     ) {
         String principal = auth.getName();
-        System.out.println("AUTH NAME: " + auth.getName());
 
         AppUser user = userRepo.findByUsername(principal)
                 .or(() -> userRepo.findByEmail(principal))
@@ -226,7 +224,6 @@ public class TenantController {
             Authentication auth
     ) {
         String principal = auth.getName();
-        System.out.println("AUTH NAME: " + auth.getName());
 
         Tenant tenant = tenantRepo.findById(tenantId)
                 .orElseThrow(() -> new IllegalArgumentException("Tenant not found"));
@@ -255,6 +252,12 @@ public class TenantController {
 
         String email = req.email().trim().toLowerCase();
         TenantRole role = (req.role() == null) ? TenantRole.STAFF : req.role();
+
+        if (!UserHierarchyPolicy.canAssignTenantRole(membership.getRole(), role)) {
+            return ResponseEntity.badRequest().body(
+                    new ApiResponse<>(false, "You can only invite teammates below your own hierarchy level.", null)
+            );
+        }
 
         // Guard: if invited user already exists and is already a member, block
         AppUser invitedUser = userRepo.findByEmail(email).orElse(null);
@@ -349,12 +352,8 @@ public class TenantController {
     }
 
     private void applyRequestedModules(Tenant tenant, Boolean poultryEnabled, Boolean fishEnabled) {
-        boolean poultry = poultryEnabled == null && fishEnabled == null
-                ? true
-                : Boolean.TRUE.equals(poultryEnabled);
-        boolean fish = poultryEnabled == null && fishEnabled == null
-                ? true
-                : Boolean.TRUE.equals(fishEnabled);
+        boolean poultry = Boolean.TRUE.equals(poultryEnabled);
+        boolean fish = Boolean.TRUE.equals(fishEnabled);
 
         if (!poultry && !fish) {
             throw new IllegalArgumentException("Select at least one module for this farm.");

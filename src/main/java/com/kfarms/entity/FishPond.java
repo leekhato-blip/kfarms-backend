@@ -17,6 +17,7 @@ import java.time.LocalDate;
         }
 )
 @Data
+@EqualsAndHashCode(callSuper = true)
 @AllArgsConstructor
 @NoArgsConstructor
 public class FishPond extends Auditable{

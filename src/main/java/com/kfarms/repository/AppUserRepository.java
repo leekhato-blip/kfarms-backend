@@ -16,8 +16,10 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long>, JpaSpec
     // Fetch all users by role
     List<AppUser> findByRole(Role role);
     long countByRole(Role role);
+    long countByRoleAndEnabledTrue(Role role);
     Optional<AppUser> findByUsername(String username);
     Optional<AppUser> findByEmail(String email);
+    Optional<AppUser> findByPhoneNumber(String phoneNumber);
 
     @Query("""
         SELECT u FROM AppUser u

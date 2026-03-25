@@ -17,6 +17,9 @@ public class TenantAdminDetailsDto {
     private String slug;
     private TenantPlan plan;
     private TenantStatus status;
+    private String appId;
+    private String appName;
+    private String appLifecycle;
 
     private String ownerEmail;
     private int memberCount;
@@ -30,5 +33,6 @@ public class TenantAdminDetailsDto {
     private long feedItemCount;
     private long salesCount;
 
+    private List<String> enabledModules;
     private List<TenantMemberSummaryDto> members;
 }

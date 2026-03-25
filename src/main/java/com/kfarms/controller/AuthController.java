@@ -1,83 +1,87 @@
 package com.kfarms.controller;
 
+import com.kfarms.dto.AuthSignupRequest;
+import com.kfarms.dto.ContactVerificationRequest;
 import com.kfarms.dto.LoginRequest;
 import com.kfarms.dto.LoginResponse;
 import com.kfarms.dto.UserDto;
+import com.kfarms.dto.VerificationResendRequest;
 import com.kfarms.entity.ApiResponse;
 import com.kfarms.entity.AppUser;
-import com.kfarms.entity.Role;
 import com.kfarms.repository.AppUserRepository;
-import com.kfarms.security.JwtCookie;
+import com.kfarms.security.AuthCookieFactory;
+import com.kfarms.security.ContactVerificationService;
 import com.kfarms.security.JwtService;
-import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.Duration;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/auth") // All routes under /api/auth
+@RequiredArgsConstructor
 public class AuthController {
     private final JwtService jwtService;
     private final AppUserRepository userRepo;
-    private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authManager;
-
-    // Inject AppUserRepository and PasswordEncoder through constructor
-    public AuthController(AppUserRepository userRepo,
-                          PasswordEncoder passwordEncoder,
-                          AuthenticationManager authManager,
-                          JwtService jwtService) {
-        this.userRepo = userRepo;
-        this.passwordEncoder = passwordEncoder;
-        this.authManager = authManager;
-        this.jwtService = jwtService;
-        System.out.println("✅ AuthController loaded!");
-    }
+    private final AuthCookieFactory authCookieFactory;
+    private final ContactVerificationService contactVerificationService;
 
     // === REGISTER NEW USER === //
     @PostMapping("/signup")
-    public ResponseEntity<ApiResponse<String>> signup(@RequestBody AppUser user){
+    public ResponseEntity<ApiResponse<Map<String, Object>>> signup(@Valid @RequestBody AuthSignupRequest request){
+        return ResponseEntity.status(HttpStatus.CREATED).body(
+                new ApiResponse<>(
+                        true,
+                        "Account created. Verify your email and phone to continue.",
+                        contactVerificationService.register(request)
+                )
+        );
+    }
 
-        // Check if email already exists
-        if(userRepo.findByEmail(user.getEmail()).isPresent()) {
-            return ResponseEntity.badRequest()
-                    .body(new ApiResponse<>(false, "Email already registered", null));
-        }
-
-        // Check if username already exists
-        if(userRepo.findByUsername(user.getUsername()).isPresent()){
-            return ResponseEntity.badRequest()
-                    .body(new ApiResponse<>(false, "Username already taken", null));
-        }
-
-        // Encode the password using BCrypt
-        user.setPassword(passwordEncoder.encode(user.getPassword()));
-        user.setRole(Role.USER); // default role
-
-        // Save the new user in the database
-        userRepo.save(user);
-
+    @PostMapping("/verify-contact")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> verifyContact(
+            @Valid @RequestBody ContactVerificationRequest request
+    ) {
         return ResponseEntity.ok(
-                new ApiResponse<>(true, "User registered successfully", null)
+                new ApiResponse<>(
+                        true,
+                        "Contact verification completed.",
+                        contactVerificationService.verify(request)
+                )
+        );
+    }
+
+    @PostMapping("/resend-contact-verification")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> resendContactVerification(
+            @Valid @RequestBody VerificationResendRequest request
+    ) {
+        return ResponseEntity.ok(
+                new ApiResponse<>(
+                        true,
+                        "Verification code sent.",
+                        contactVerificationService.resend(request)
+                )
         );
     }
 
     // == Login Existing User (by email or username) == //
     @PostMapping("/login")
-    public ResponseEntity<ApiResponse<LoginResponse>> login(@RequestBody LoginRequest loginRequest,
-                                                                HttpServletResponse response){
+    public ResponseEntity<ApiResponse<Object>> login(
+            @RequestBody LoginRequest loginRequest,
+            HttpServletResponse response
+    ){
         try{
             // Authenticate using email or username
             Authentication auth = authManager.authenticate(
@@ -96,26 +100,21 @@ public class AuthController {
             AppUser user = userRepo.findByEmail(principal)
                     .orElseThrow(() -> new RuntimeException("User not found"));
 
-            String formattedUsername = StringUtils.capitalize(user.getUsername().toLowerCase());
-            UserDto userDto = new UserDto(
-                    user.getId(),
-                    formattedUsername,
-                    user.getEmail(),
-                    user.getRole().name()
-            );
+            if (!contactVerificationService.isFullyVerified(user)) {
+                SecurityContextHolder.clearContext();
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .body(new ApiResponse<>(
+                                false,
+                                "Verify your email and phone to continue.",
+                                contactVerificationService.buildVerificationPayload(user, Map.of())
+                        ));
+            }
+
+            UserDto userDto = toUserDto(user);
             // Generate token
             String jwt = jwtService.generateToken(principal);
 
-            // Set HttpOnly cookie (dev-friendly: Secure=false on localhost)
-            boolean isProd = false;
-            ResponseCookie cookie = ResponseCookie.from(JwtCookie.ACCESS_COOKIE, jwt)
-                    .httpOnly(true)
-                    .secure(isProd) // true in production HTTPS
-                    .path(JwtCookie.PATH)
-                    .maxAge(Duration.ofDays(1))
-                    .sameSite("Lax")
-                    .build();
-            response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+            response.addHeader(HttpHeaders.SET_COOKIE, authCookieFactory.createSessionCookie(jwt).toString());
 
             // Optional: can stop returning jwt in body. For now keep it or set it null.
             LoginResponse loginResponse = new LoginResponse(jwt, userDto);
@@ -134,17 +133,7 @@ public class AuthController {
     }
     @PostMapping("/logout")
     public ResponseEntity<ApiResponse<String>> logout(HttpServletResponse response) {
-        boolean isProd = false;
-
-        ResponseCookie cookie = ResponseCookie.from(JwtCookie.ACCESS_COOKIE, "")
-                .httpOnly(true)
-                .secure(isProd)
-                .path(JwtCookie.PATH)
-                .maxAge(0)      // delete cookie
-                .sameSite("Lax")
-                .build();
-
-        response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+        response.addHeader(HttpHeaders.SET_COOKIE, authCookieFactory.clearSessionCookie().toString());
 
         return  ResponseEntity.ok(new ApiResponse<>(true, "Logged out", null));
     }
@@ -161,15 +150,21 @@ public class AuthController {
         AppUser user = userRepo.findByEmail(principal)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        String formattedUsername = StringUtils.capitalize(user.getUsername().toLowerCase());
+        return ResponseEntity.ok(new ApiResponse<>(true, "OK", toUserDto(user)));
+    }
 
-        UserDto userDto = new UserDto(
+    private UserDto toUserDto(AppUser user) {
+        String formattedUsername = StringUtils.capitalize(user.getUsername().toLowerCase());
+        return new UserDto(
                 user.getId(),
                 formattedUsername,
                 user.getEmail(),
-                user.getRole().name()
+                user.getRole().name(),
+                user.getPhoneNumber(),
+                !Boolean.FALSE.equals(user.getEmailVerified()),
+                !StringUtils.hasText(user.getPhoneNumber()) || !Boolean.FALSE.equals(user.getPhoneVerified()),
+                user.isPlatformAccess(),
+                user.isEnabled()
         );
-
-        return ResponseEntity.ok(new ApiResponse<>(true, "OK", userDto));
     }
 }

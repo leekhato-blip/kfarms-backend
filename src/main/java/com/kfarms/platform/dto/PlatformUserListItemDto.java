@@ -15,6 +15,7 @@ public class PlatformUserListItemDto {
     private String email;
 
     private Role role;              // USER / PLATFORM_ADMIN
+    private boolean platformAccess;
     private boolean active;
     private int tenantCount;         // number of memberships
 

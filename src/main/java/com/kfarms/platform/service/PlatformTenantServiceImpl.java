@@ -19,6 +19,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -27,6 +28,9 @@ import java.util.List;
 @RequiredArgsConstructor
 public class PlatformTenantServiceImpl implements PlatformTenantService {
 
+    private static final String CURRENT_APP_ID = "kfarms";
+    private static final String CURRENT_APP_NAME = "KFarms";
+    private static final String CURRENT_APP_LIFECYCLE = "LIVE";
 
     private final TenantRepository tenantRepository;
     private final TenantMemberRepository tenantMemberRepository;
@@ -37,6 +41,7 @@ public class PlatformTenantServiceImpl implements PlatformTenantService {
     private final NotificationService notificationService; // optional for informing owners
 
     @Override
+    @Transactional(readOnly = true)
     public Page<TenantAdminListItemDto> searchTenants(
             String search,
             TenantStatus status,
@@ -97,11 +102,12 @@ public class PlatformTenantServiceImpl implements PlatformTenantService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public TenantAdminDetailsDto getTenantDetails(Long tenantId) {
         Tenant tenant = tenantRepository.findById(tenantId)
                 .orElseThrow(() -> new ResourceNotFoundException("Tenant not found", "tenantId", tenantId));
 
-        List<TenantMember> members = tenantMemberRepository.findByTenant_Id(tenantId);
+        List<TenantMember> members = tenantMemberRepository.findAllByTenantIdWithUser(tenantId);
 
         long livestockCount = livestockRepository.countByTenantId(tenantId);
         long fishPondCount = fishPondRepository.countByTenantId(tenantId);
@@ -112,6 +118,7 @@ public class PlatformTenantServiceImpl implements PlatformTenantService {
     }
 
     @Override
+    @Transactional
     public void updateTenantPlan(Long tenantId, TenantPlan newPlan) {
         Tenant tenant = tenantRepository.findById(tenantId)
                 .orElseThrow(() -> new ResourceNotFoundException("Tenant not found", "tenantId", tenantId));
@@ -128,6 +135,7 @@ public class PlatformTenantServiceImpl implements PlatformTenantService {
     }
 
     @Override
+    @Transactional
     public void updateTenantStatus(Long tenantId, TenantStatus newStatus) {
         Tenant tenant = tenantRepository.findById(tenantId)
                 .orElseThrow(() -> new ResourceNotFoundException("Tenant not found", "tenantId", tenantId));
@@ -160,6 +168,9 @@ public class PlatformTenantServiceImpl implements PlatformTenantService {
                 .slug(tenant.getSlug())
                 .plan(tenant.getPlan())
                 .status(tenant.getStatus())
+                .appId(CURRENT_APP_ID)
+                .appName(CURRENT_APP_NAME)
+                .appLifecycle(CURRENT_APP_LIFECYCLE)
                 .ownerEmail(owner != null ? owner.getUser().getEmail() : null)
                 .memberCount(memberCount)
                 .createdAt(tenant.getCreatedAt())
@@ -195,6 +206,9 @@ public class PlatformTenantServiceImpl implements PlatformTenantService {
                 .slug(tenant.getSlug())
                 .plan(tenant.getPlan())
                 .status(tenant.getStatus())
+                .appId(CURRENT_APP_ID)
+                .appName(CURRENT_APP_NAME)
+                .appLifecycle(CURRENT_APP_LIFECYCLE)
                 .ownerEmail(owner != null ? owner.getUser().getEmail() : null)
                 .memberCount(members.size())
                 .createdAt(tenant.getCreatedAt())
@@ -203,15 +217,30 @@ public class PlatformTenantServiceImpl implements PlatformTenantService {
                 .fishPondCount(fishPondCount)
                 .feedItemCount(feedItemCount)
                 .salesCount(salesCount)
+                .enabledModules(resolveEnabledModules(tenant))
                 .members(memberDtos)
                 .build();
+    }
+
+    private List<String> resolveEnabledModules(Tenant tenant) {
+        List<String> modules = new ArrayList<>();
+
+        if (Boolean.TRUE.equals(tenant.getPoultryEnabled())) {
+            modules.add("POULTRY");
+        }
+
+        if (Boolean.TRUE.equals(tenant.getFishEnabled())) {
+            modules.add("FISH_FARMING");
+        }
+
+        return modules;
     }
 
 
     private void notifyTenantOwnersAndAdmins(Tenant tenant, String message) {
 
         List<TenantMember> ownersAndAdmins =
-                tenantMemberRepository.findByTenantIdAndRoleInAndActiveTrue(
+                tenantMemberRepository.findActiveMembersByTenantAndRoles(
                         tenant.getId(),
                         List.of(TenantRole.OWNER, TenantRole.ADMIN)
                 );

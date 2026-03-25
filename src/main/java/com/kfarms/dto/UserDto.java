@@ -10,4 +10,9 @@ public class UserDto {
     private String username;
     private String email;
     private String role;
+    private String phoneNumber;
+    private boolean emailVerified;
+    private boolean phoneVerified;
+    private boolean platformAccess;
+    private boolean enabled;
 }

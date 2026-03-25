@@ -31,7 +31,12 @@ public class TenantFilter extends OncePerRequestFilter {
         boolean tenantContextBound = false;
         String uri = request.getRequestURI();
 
-        if (uri.startsWith("/platform") || uri.startsWith("/api/platform") || uri.startsWith("/error")) {
+        if (
+                uri.startsWith("/platform")
+                        || uri.startsWith("/api/platform")
+                        || uri.startsWith("/actuator")
+                        || uri.startsWith("/error")
+        ) {
             filterChain.doFilter(request, response);
             return;
         }
@@ -51,6 +56,7 @@ public class TenantFilter extends OncePerRequestFilter {
                     || path.equals("/api/billing/paystack/webhook")
                     || path.startsWith("/api/tenants")
                     || path.startsWith("/platform")
+                    || path.startsWith("/actuator")
                     || path.startsWith("/error")) {
                 filterChain.doFilter(request, response);
                 return;

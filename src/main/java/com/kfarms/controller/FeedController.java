@@ -8,6 +8,7 @@ import com.kfarms.service.FeedService;
 import com.kfarms.tenant.entity.TenantPlan;
 import com.kfarms.tenant.service.TenantPlanGuardService;
 import jakarta.validation.Valid;
+import lombok.extern.slf4j.Slf4j;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
@@ -21,6 +22,7 @@ import java.time.LocalDate;
 import java.util.Map;
 
 @RestController
+@Slf4j
 @RequiredArgsConstructor
 @RequestMapping("/api/feeds")
 public class FeedController {
@@ -47,7 +49,7 @@ public class FeedController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
             @RequestParam(required = false, defaultValue = "false") Boolean deleted
             ) {
-        System.out.println("batchType param received: '" + batchType + "'");
+        log.debug("Fetching feeds with batchType='{}', date='{}', deleted={}", batchType, date, deleted);
         if (Boolean.TRUE.equals(deleted)) {
             tenantPlanGuardService.requireCurrentTenantPlanAccess(
                     TenantPlan.PRO,

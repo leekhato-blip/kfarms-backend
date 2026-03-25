@@ -6,7 +6,7 @@ import org.springframework.data.domain.Pageable;
 
 public interface PlatformUserService {
 
-    Page<PlatformUserListItemDto> searchUsers(String search, Pageable pageable);
+    Page<PlatformUserListItemDto> searchUsers(String search, boolean platformOnly, Pageable pageable);
 
     void setPlatformAdmin(Long userId, boolean value);
 

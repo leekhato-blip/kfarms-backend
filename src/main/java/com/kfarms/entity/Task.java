@@ -30,16 +30,20 @@ public class Task extends Auditable {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
+    @Builder.Default
     private TaskType type = TaskType.OTHER;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
+    @Builder.Default
     private TaskStatus status = TaskStatus.PENDING;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
+    @Builder.Default
     private TaskSource source = TaskSource.MANUAL;
 
+    @Builder.Default
     private Integer priority = 3;
 
     private LocalDateTime dueDate;

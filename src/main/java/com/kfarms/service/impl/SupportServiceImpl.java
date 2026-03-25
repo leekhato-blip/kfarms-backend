@@ -26,6 +26,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -207,6 +208,41 @@ public class SupportServiceImpl implements SupportService {
     }
 
     @Override
+    public Map<String, Object> getPlatformTickets(String search, String status, String lane, int page, int size) {
+        int safePage = Math.max(page, 0);
+        int safeSize = Math.min(Math.max(size, 1), 50);
+        String normalizedSearch = normalizeText(search).toLowerCase(Locale.ROOT);
+        String normalizedStatus = normalizeText(status).toUpperCase(Locale.ROOT);
+        String normalizedLane = normalizeText(lane).toUpperCase(Locale.ROOT);
+
+        List<Map<String, Object>> filtered = supportTicketRepository.findAllActiveWithTenantAndMessages()
+                .stream()
+                .filter((ticket) -> matchesPlatformSearch(ticket, normalizedSearch))
+                .filter((ticket) -> matchesPlatformStatus(ticket, normalizedStatus))
+                .filter((ticket) -> matchesPlatformLane(ticket, normalizedLane))
+                .sorted(Comparator
+                        .comparing(SupportTicket::getUpdatedAt, Comparator.nullsLast(Comparator.naturalOrder()))
+                        .reversed()
+                        .thenComparing(SupportTicket::getId, Comparator.nullsLast(Comparator.reverseOrder())))
+                .map(this::toPlatformTicketPayload)
+                .toList();
+
+        int fromIndex = Math.min(safePage * safeSize, filtered.size());
+        int toIndex = Math.min(fromIndex + safeSize, filtered.size());
+        int totalPages = filtered.isEmpty() ? 1 : (int) Math.ceil((double) filtered.size() / safeSize);
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("items", filtered.subList(fromIndex, toIndex));
+        result.put("page", safePage);
+        result.put("size", safeSize);
+        result.put("totalItems", filtered.size());
+        result.put("totalPages", totalPages);
+        result.put("statusCounts", summarizeTicketsByStatus(filtered));
+        result.put("laneCounts", summarizeTicketsByLane(filtered));
+        return result;
+    }
+
+    @Override
     public Map<String, Object> createTicket(SupportTicketCreateRequestDto request, String actor) {
         Tenant tenant = requireTenant();
         String actorName = resolveActorName(actor);
@@ -249,6 +285,22 @@ public class SupportServiceImpl implements SupportService {
     }
 
     @Override
+    public Map<String, Object> addPlatformTicketReply(String ticketId, SupportTicketMessageRequestDto request, String actor) {
+        SupportTicket ticket = requirePlatformTicket(ticketId);
+        String actorName = resolveActorName(actor);
+        Tenant tenant = ticket.getTenant();
+        LocalDateTime now = LocalDateTime.now();
+
+        appendTicketMessage(ticket, tenant, SupportMessageAuthorType.SUPPORT, actorName, request.getBody(), actorName, now);
+        ticket.setStatus(SupportTicketStatus.PENDING);
+        ticket.setUpdatedBy(actorName);
+        ticket.setUpdatedAt(now);
+
+        SupportTicket saved = supportTicketRepository.save(ticket);
+        return platformTicketEnvelope(saved);
+    }
+
+    @Override
     public Map<String, Object> updateTicketStatus(String ticketId, SupportTicketStatusUpdateRequestDto request, String actor) {
         Tenant tenant = requireTenant();
         String actorName = resolveActorName(actor);
@@ -261,6 +313,20 @@ public class SupportServiceImpl implements SupportService {
 
         SupportTicket saved = supportTicketRepository.save(ticket);
         return ticketEnvelope(saved);
+    }
+
+    @Override
+    public Map<String, Object> updatePlatformTicketStatus(String ticketId, SupportTicketStatusUpdateRequestDto request, String actor) {
+        SupportTicket ticket = requirePlatformTicket(ticketId);
+        String actorName = resolveActorName(actor);
+        LocalDateTime now = LocalDateTime.now();
+
+        ticket.setStatus(parseStatus(request.getStatus()));
+        ticket.setUpdatedBy(actorName);
+        ticket.setUpdatedAt(now);
+
+        SupportTicket saved = supportTicketRepository.save(ticket);
+        return platformTicketEnvelope(saved);
     }
 
     @Override
@@ -367,6 +433,12 @@ public class SupportServiceImpl implements SupportService {
         return result;
     }
 
+    private Map<String, Object> platformTicketEnvelope(SupportTicket ticket) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("ticket", toPlatformTicketPayload(ticket));
+        return result;
+    }
+
     private SupportTicket requireTicket(String ticketId, Long tenantId) {
         String normalizedTicketId = normalizeText(ticketId);
         if (normalizedTicketId.isBlank()) {
@@ -376,6 +448,20 @@ public class SupportServiceImpl implements SupportService {
         return supportTicketRepository.findByTicketCodeAndTenantIdWithMessages(normalizedTicketId, tenantId)
                 .or(() -> parseLong(normalizedTicketId)
                         .flatMap(id -> supportTicketRepository.findByIdAndTenantIdWithMessages(id, tenantId)))
+                .orElseThrow(() -> new IllegalArgumentException("Support ticket not found."));
+    }
+
+    private SupportTicket requirePlatformTicket(String ticketId) {
+        String normalizedTicketId = normalizeText(ticketId);
+        if (normalizedTicketId.isBlank()) {
+            throw new IllegalArgumentException("Ticket id is required.");
+        }
+
+        return supportTicketRepository.findAllActiveWithTenantAndMessages()
+                .stream()
+                .filter((ticket) -> normalizedTicketId.equalsIgnoreCase(ticket.getTicketCode())
+                        || parseLong(normalizedTicketId).map((id) -> Objects.equals(ticket.getId(), id)).orElse(false))
+                .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("Support ticket not found."));
     }
 
@@ -1319,6 +1405,10 @@ public class SupportServiceImpl implements SupportService {
         payload.put("category", ticket.getCategory());
         payload.put("priority", ticket.getPriority() != null ? ticket.getPriority().name() : SupportTicketPriority.MEDIUM.name());
         payload.put("status", ticket.getStatus() != null ? ticket.getStatus().name() : SupportTicketStatus.OPEN.name());
+        payload.put("lane", resolveSupportLane(ticket));
+        payload.put("plan", ticket.getTenant() != null && ticket.getTenant().getPlan() != null
+                ? ticket.getTenant().getPlan().name()
+                : TenantPlan.FREE.name());
         payload.put("description", ticket.getDescription());
         payload.put("createdAt", ticket.getCreatedAt());
         payload.put("updatedAt", ticket.getUpdatedAt());
@@ -1329,6 +1419,103 @@ public class SupportServiceImpl implements SupportService {
                         .toList()
         );
         return payload;
+    }
+
+    private Map<String, Object> toPlatformTicketPayload(SupportTicket ticket) {
+        Map<String, Object> payload = toTicketPayload(ticket);
+        Tenant tenant = ticket.getTenant();
+        payload.put("tenantId", tenant != null ? tenant.getId() : null);
+        payload.put("tenantName", tenant != null ? tenant.getName() : "");
+        payload.put("tenantSlug", tenant != null ? tenant.getSlug() : "");
+        payload.put("tenantPlan", tenant != null && tenant.getPlan() != null ? tenant.getPlan().name() : TenantPlan.FREE.name());
+        payload.put("tenantStatus", tenant != null && tenant.getStatus() != null ? tenant.getStatus().name() : "");
+        payload.put("tenantContactEmail", tenant != null ? normalizeText(tenant.getContactEmail()) : "");
+        payload.put("laneLabel", resolveSupportLaneLabel(ticket));
+        return payload;
+    }
+
+    private boolean matchesPlatformSearch(SupportTicket ticket, String normalizedSearch) {
+        if (normalizedSearch.isBlank()) {
+            return true;
+        }
+
+        Tenant tenant = ticket.getTenant();
+        String haystack = String.join(
+                " ",
+                normalizeText(ticket.getTicketCode()),
+                normalizeText(ticket.getSubject()),
+                normalizeText(ticket.getCategory()),
+                normalizeText(ticket.getDescription()),
+                tenant != null ? normalizeText(tenant.getName()) : "",
+                tenant != null ? normalizeText(tenant.getSlug()) : "",
+                tenant != null ? normalizeText(tenant.getContactEmail()) : ""
+        ).toLowerCase(Locale.ROOT);
+
+        return haystack.contains(normalizedSearch);
+    }
+
+    private boolean matchesPlatformStatus(SupportTicket ticket, String normalizedStatus) {
+        if (normalizedStatus.isBlank() || "ALL".equals(normalizedStatus)) {
+            return true;
+        }
+        String currentStatus = ticket.getStatus() != null ? ticket.getStatus().name() : SupportTicketStatus.OPEN.name();
+        return currentStatus.equalsIgnoreCase(normalizedStatus);
+    }
+
+    private boolean matchesPlatformLane(SupportTicket ticket, String normalizedLane) {
+        if (normalizedLane.isBlank() || "ALL".equals(normalizedLane)) {
+            return true;
+        }
+        return resolveSupportLane(ticket).equalsIgnoreCase(normalizedLane);
+    }
+
+    private Map<String, Object> summarizeTicketsByStatus(List<Map<String, Object>> items) {
+        Map<String, Long> counts = items.stream()
+                .collect(Collectors.groupingBy(
+                        (item) -> String.valueOf(item.getOrDefault("status", SupportTicketStatus.OPEN.name())).toUpperCase(Locale.ROOT),
+                        LinkedHashMap::new,
+                        Collectors.counting()
+                ));
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("OPEN", counts.getOrDefault("OPEN", 0L));
+        payload.put("PENDING", counts.getOrDefault("PENDING", 0L));
+        payload.put("RESOLVED", counts.getOrDefault("RESOLVED", 0L));
+        return payload;
+    }
+
+    private Map<String, Object> summarizeTicketsByLane(List<Map<String, Object>> items) {
+        Map<String, Long> counts = items.stream()
+                .collect(Collectors.groupingBy(
+                        (item) -> String.valueOf(item.getOrDefault("lane", "STANDARD")).toUpperCase(Locale.ROOT),
+                        LinkedHashMap::new,
+                        Collectors.counting()
+                ));
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("STANDARD", counts.getOrDefault("STANDARD", 0L));
+        payload.put("PRIORITY", counts.getOrDefault("PRIORITY", 0L));
+        payload.put("DEDICATED", counts.getOrDefault("DEDICATED", 0L));
+        return payload;
+    }
+
+    private String resolveSupportLane(SupportTicket ticket) {
+        TenantPlan plan = ticket.getTenant() != null && ticket.getTenant().getPlan() != null
+                ? ticket.getTenant().getPlan()
+                : TenantPlan.FREE;
+        if (plan == TenantPlan.ENTERPRISE) {
+            return "DEDICATED";
+        }
+        if (plan == TenantPlan.PRO) {
+            return "PRIORITY";
+        }
+        return "STANDARD";
+    }
+
+    private String resolveSupportLaneLabel(SupportTicket ticket) {
+        return switch (resolveSupportLane(ticket)) {
+            case "DEDICATED" -> "Dedicated lane";
+            case "PRIORITY" -> "Priority lane";
+            default -> "Standard lane";
+        };
     }
 
     private Map<String, Object> toTicketMessagePayload(SupportTicketMessage message) {

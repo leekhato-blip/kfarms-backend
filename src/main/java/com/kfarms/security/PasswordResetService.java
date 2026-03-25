@@ -5,6 +5,7 @@ import com.kfarms.repository.AppUserRepository;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.mail.MailException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.javamail.JavaMailSender;
@@ -18,6 +19,7 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class PasswordResetService {
 
@@ -76,7 +78,7 @@ public class PasswordResetService {
             helper.setText(html, true);
 
             mailSender.send(mimeMessage);
-            System.out.println("Password reset email sent to " + to);
+            log.info("Password reset email sent to {}", to);
         } catch (MailException | MessagingException e) {
             throw new IllegalStateException("We could not send the reset email right now. Please try again.");
         }
@@ -91,9 +93,7 @@ public class PasswordResetService {
             throw new IllegalArgumentException("Invalid or expired reset link.");
         }
 
-        if (normalizedPassword.length() < 8) {
-            throw new IllegalArgumentException("Use at least 8 characters for your new password.");
-        }
+        AccountSecuritySupport.validatePassword(normalizedPassword, AccountSecuritySupport.MIN_PASSWORD_LENGTH);
 
         PasswordResetToken resetToken = tokenRepo.findByToken(normalizedToken)
                 .orElseThrow(() -> new IllegalArgumentException("Invalid or expired reset link."));

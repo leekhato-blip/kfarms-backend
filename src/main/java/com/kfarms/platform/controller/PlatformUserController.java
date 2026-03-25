@@ -13,7 +13,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/platform/users")
+@RequestMapping("/api/platform/users")
 @RequiredArgsConstructor
 @PreAuthorize("hasRole('PLATFORM_ADMIN')")
 public class PlatformUserController {
@@ -23,13 +23,14 @@ public class PlatformUserController {
     @GetMapping
     public ResponseEntity<ApiResponse<Page<PlatformUserListItemDto>>> listUsers(
             @RequestParam(required = false) String search,
+            @RequestParam(defaultValue = "true") boolean platformOnly,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
     ) {
         Pageable pageable = PageRequest.of(page, size);
 
         Page<PlatformUserListItemDto> result =
-                platformUserService.searchUsers(search, pageable);
+                platformUserService.searchUsers(search, platformOnly, pageable);
 
         return ResponseEntity.ok(
                 new ApiResponse<>(

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.kfarms.entity.Auditable;
 import jakarta.persistence.*;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
 
@@ -12,6 +13,7 @@ import java.util.List;
 
 @Entity
 @Data
+@EqualsAndHashCode(callSuper = true)
 @NoArgsConstructor
 @Table(name = "tenant", indexes = {
         @Index(name = "idx_tenant_slug", columnList = "slug", unique = true)
@@ -48,6 +50,9 @@ public class Tenant extends Auditable {
 
     @Column(name = "contact_phone", length = 32)
     private String contactPhone;
+
+    @Column(name = "critical_sms_alerts_enabled")
+    private Boolean criticalSmsAlertsEnabled = false;
 
     @Column(length = 500)
     private String address;
@@ -89,10 +94,10 @@ public class Tenant extends Auditable {
     private Integer sessionTimeoutMinutes = 480;
 
     @Column(name = "poultry_enabled")
-    private Boolean poultryEnabled = true;
+    private Boolean poultryEnabled = false;
 
     @Column(name = "fish_enabled")
-    private Boolean fishEnabled = true;
+    private Boolean fishEnabled = false;
 
     @OneToMany(mappedBy = "tenant", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
     @ToString.Exclude

@@ -17,6 +17,9 @@ public class TenantAdminListItemDto {
     private String slug;
     private TenantPlan plan;
     private TenantStatus status;
+    private String appId;
+    private String appName;
+    private String appLifecycle;
 
     private String ownerEmail;
     private int memberCount;

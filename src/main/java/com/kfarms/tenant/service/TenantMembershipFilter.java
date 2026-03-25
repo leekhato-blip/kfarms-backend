@@ -38,7 +38,7 @@ public class TenantMembershipFilter extends OncePerRequestFilter {
 
         String uri = request.getRequestURI();
 
-        if (uri.startsWith("/platform")) {
+        if (uri.startsWith("/platform") || uri.startsWith("/api/platform") || uri.startsWith("/error")) {
             filterChain.doFilter(request, response);
             return;
         }
@@ -54,9 +54,11 @@ public class TenantMembershipFilter extends OncePerRequestFilter {
         // Skip tenant membership enforcement for auth + tenant bootstrap + platform
         if (path.startsWith("/auth/")
                 || path.startsWith("/api/auth")
+                || path.startsWith("/api/platform")
                 || path.equals("/api/billing/paystack/webhook")
                 || path.startsWith("/api/tenants")     // list/create tenants, accept invites, etc.
-                || path.startsWith("/platform")) {
+                || path.startsWith("/platform")
+                || path.startsWith("/error")) {
             filterChain.doFilter(request, response);
             return;
         }

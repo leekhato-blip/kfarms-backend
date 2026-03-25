@@ -15,6 +15,16 @@ public interface SupportTicketRepository extends JpaRepository<SupportTicket, Lo
     @Query("""
         select distinct t
         from SupportTicket t
+        join fetch t.tenant tenant
+        left join fetch t.messages m
+        where (t.deleted = false or t.deleted is null)
+        order by t.updatedAt desc, t.id desc
+    """)
+    List<SupportTicket> findAllActiveWithTenantAndMessages();
+
+    @Query("""
+        select distinct t
+        from SupportTicket t
         left join fetch t.messages m
         where t.tenant.id = :tenantId
           and (t.deleted = false or t.deleted is null)

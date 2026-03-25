@@ -2,6 +2,7 @@ package com.kfarms.settings.service;
 
 import com.kfarms.entity.AppUser;
 import com.kfarms.repository.AppUserRepository;
+import com.kfarms.security.AccountSecuritySupport;
 import com.kfarms.settings.dto.ChangePasswordRequest;
 import com.kfarms.settings.dto.OrganizationSettingsDto;
 import com.kfarms.settings.dto.UserPreferencesDto;
@@ -69,8 +70,33 @@ public class SettingsService {
         tenant.setName(requireText(request.organizationName(), "Workspace name is required."));
         tenant.setTimezone(orDefault(request.timezone(), DEFAULT_TIMEZONE));
         tenant.setCurrency(orDefault(request.currency(), DEFAULT_CURRENCY).toUpperCase());
-        tenant.setContactEmail(emptyToNull(request.contactEmail()));
-        tenant.setContactPhone(emptyToNull(request.contactPhone()));
+        String contactEmail = emptyToNull(request.contactEmail());
+        if (contactEmail != null) {
+            contactEmail = AccountSecuritySupport.normalizeEmail(contactEmail);
+            if (!AccountSecuritySupport.isValidEmail(contactEmail)) {
+                throw new IllegalArgumentException("Add a valid workspace contact email.");
+            }
+        }
+
+        String contactPhone = emptyToNull(request.contactPhone());
+        if (contactPhone != null) {
+            contactPhone = AccountSecuritySupport.normalizePhoneNumber(contactPhone);
+            if (!AccountSecuritySupport.isValidPhoneNumber(contactPhone)) {
+                throw new IllegalArgumentException("Add a valid workspace contact phone.");
+            }
+        }
+
+        tenant.setContactEmail(contactEmail);
+        tenant.setContactPhone(contactPhone);
+        boolean criticalSmsAlertsEnabled = resolveBoolean(
+                request.criticalSmsAlertsEnabled(),
+                tenant.getCriticalSmsAlertsEnabled(),
+                false
+        );
+        if (criticalSmsAlertsEnabled && emptyToNull(tenant.getContactPhone()) == null) {
+            throw new IllegalArgumentException("Add a workspace contact phone before enabling critical SMS alerts.");
+        }
+        tenant.setCriticalSmsAlertsEnabled(criticalSmsAlertsEnabled);
         tenant.setAddress(emptyToNull(request.address()));
         tenant.setWatermarkEnabled(resolveBoolean(
                 request.watermarkEnabled(),
@@ -162,11 +188,9 @@ public class SettingsService {
 
         Tenant tenant = requireTenant();
         boolean strongPasswordPolicy = Boolean.TRUE.equals(tenant.getStrongPasswordPolicyEnabled());
-        int minimumLength = strongPasswordPolicy ? 12 : 8;
+        int minimumLength = strongPasswordPolicy ? 12 : AccountSecuritySupport.MIN_PASSWORD_LENGTH;
 
-        if (newPassword.length() < minimumLength) {
-            throw new IllegalArgumentException("New password must be at least " + minimumLength + " characters.");
-        }
+        AccountSecuritySupport.validatePassword(newPassword, minimumLength);
 
         if (strongPasswordPolicy && !matchesStrongPasswordPolicy(newPassword)) {
             throw new IllegalArgumentException(
@@ -194,6 +218,7 @@ public class SettingsService {
                 orDefault(tenant.getCurrency(), DEFAULT_CURRENCY).toUpperCase(),
                 safe(tenant.getContactEmail()),
                 safe(tenant.getContactPhone()),
+                resolveBoolean(tenant.getCriticalSmsAlertsEnabled(), null, false),
                 safe(tenant.getAddress()),
                 resolveBoolean(tenant.getWatermarkEnabled(), null, true),
                 safe(tenant.getLogoUrl()),

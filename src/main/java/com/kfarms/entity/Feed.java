@@ -9,6 +9,7 @@ import java.time.LocalDate;
 
 
 @Data
+@EqualsAndHashCode(callSuper = true)
 @Entity
 @Table(name = "feed")
 @RequiredArgsConstructor

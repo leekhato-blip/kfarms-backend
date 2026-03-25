@@ -2,6 +2,7 @@ package com.kfarms.config;
 
 import com.kfarms.repository.NotificationRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import jakarta.annotation.PostConstruct;
@@ -9,6 +10,7 @@ import jakarta.annotation.PostConstruct;
 import java.time.LocalDateTime;
 
 @Component
+@Slf4j
 @RequiredArgsConstructor
 public class NotificationCleanupJob {
 
@@ -17,7 +19,7 @@ public class NotificationCleanupJob {
     // 🔥 Runs ONCE immediately when app starts
     @PostConstruct
     public void runOnStartup() {
-        System.out.println("Cleaning notifications older than 14-30 days");
+        log.info("Running notification cleanup for items older than 14-30 days");
         cleanupOldNotifications();
     }
 

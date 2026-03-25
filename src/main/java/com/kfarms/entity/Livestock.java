@@ -4,6 +4,7 @@ package com.kfarms.entity;
 import com.kfarms.tenant.entity.Tenant;
 import jakarta.persistence.*;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
@@ -18,6 +19,7 @@ import java.time.temporal.ChronoUnit;
         }
 )
 @Data
+@EqualsAndHashCode(callSuper = true)
 @RequiredArgsConstructor
 public class Livestock extends Auditable {
 

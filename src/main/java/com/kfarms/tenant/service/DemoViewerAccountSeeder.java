@@ -13,6 +13,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.annotation.Order;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
@@ -22,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Component
 @Order(210)
 @RequiredArgsConstructor
+@ConditionalOnProperty(name = "kfarms.demo.seed-viewer", havingValue = "true")
 public class DemoViewerAccountSeeder implements ApplicationRunner {
 
     private final AppUserRepository appUserRepository;

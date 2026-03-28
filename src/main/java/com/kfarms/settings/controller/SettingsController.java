@@ -1,6 +1,8 @@
 package com.kfarms.settings.controller;
 
 import com.kfarms.entity.ApiResponse;
+import com.kfarms.settings.dto.AccountContactUpdateRequest;
+import com.kfarms.settings.dto.AccountContactVerificationRequest;
 import com.kfarms.settings.dto.ChangePasswordRequest;
 import com.kfarms.settings.dto.OrganizationSettingsDto;
 import com.kfarms.settings.dto.UserPreferencesDto;
@@ -106,6 +108,60 @@ public class SettingsController {
                         true,
                         "Password updated successfully.",
                         Map.of("status", "updated")
+                )
+        );
+    }
+
+    @GetMapping("/account-contact")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getAccountContactStatus(Authentication authentication) {
+        return ResponseEntity.ok(
+                new ApiResponse<>(
+                        true,
+                        "Account contact status loaded.",
+                        settingsService.getAccountContactStatus(authentication)
+                )
+        );
+    }
+
+    @PutMapping("/account-contact")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> updateAccountContact(
+            Authentication authentication,
+            @RequestBody AccountContactUpdateRequest request
+    ) {
+        return ResponseEntity.ok(
+                new ApiResponse<>(
+                        true,
+                        "Account contact details updated.",
+                        settingsService.updateAccountContact(authentication, request.phoneNumber())
+                )
+        );
+    }
+
+    @PostMapping("/account-contact/send-codes")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> sendAccountContactCodes(Authentication authentication) {
+        return ResponseEntity.ok(
+                new ApiResponse<>(
+                        true,
+                        "Verification codes sent.",
+                        settingsService.sendAccountContactCodes(authentication)
+                )
+        );
+    }
+
+    @PostMapping("/account-contact/verify")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> verifyAccountContact(
+            Authentication authentication,
+            @RequestBody AccountContactVerificationRequest request
+    ) {
+        return ResponseEntity.ok(
+                new ApiResponse<>(
+                        true,
+                        "Contact verification completed.",
+                        settingsService.verifyAccountContact(authentication, request.emailCode(), request.phoneCode())
                 )
         );
     }

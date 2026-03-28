@@ -7,6 +7,6 @@ public record AuthSignupRequest(
         @NotBlank String username,
         @NotBlank @Email String email,
         @NotBlank String password,
-        @NotBlank String phoneNumber
+        String phoneNumber
 ) {
 }

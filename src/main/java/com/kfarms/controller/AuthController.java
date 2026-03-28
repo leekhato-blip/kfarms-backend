@@ -44,7 +44,7 @@ public class AuthController {
         return ResponseEntity.status(HttpStatus.CREATED).body(
                 new ApiResponse<>(
                         true,
-                        "Account created. Verify your email and phone to continue.",
+                        "Account created. You can verify your email and phone after your workspace is ready.",
                         contactVerificationService.register(request)
                 )
         );
@@ -100,16 +100,6 @@ public class AuthController {
             AppUser user = userRepo.findByEmail(principal)
                     .orElseThrow(() -> new RuntimeException("User not found"));
 
-            if (!contactVerificationService.isFullyVerified(user)) {
-                SecurityContextHolder.clearContext();
-                return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                        .body(new ApiResponse<>(
-                                false,
-                                "Verify your email and phone to continue.",
-                                contactVerificationService.buildVerificationPayload(user, Map.of())
-                        ));
-            }
-
             UserDto userDto = toUserDto(user);
             // Generate token
             String jwt = jwtService.generateToken(principal);
@@ -162,7 +152,7 @@ public class AuthController {
                 user.getRole().name(),
                 user.getPhoneNumber(),
                 !Boolean.FALSE.equals(user.getEmailVerified()),
-                !StringUtils.hasText(user.getPhoneNumber()) || !Boolean.FALSE.equals(user.getPhoneVerified()),
+                StringUtils.hasText(user.getPhoneNumber()) && !Boolean.FALSE.equals(user.getPhoneVerified()),
                 user.isPlatformAccess(),
                 user.isEnabled()
         );

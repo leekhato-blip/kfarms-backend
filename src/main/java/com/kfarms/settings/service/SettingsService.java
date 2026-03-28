@@ -3,6 +3,7 @@ package com.kfarms.settings.service;
 import com.kfarms.entity.AppUser;
 import com.kfarms.repository.AppUserRepository;
 import com.kfarms.security.AccountSecuritySupport;
+import com.kfarms.security.ContactVerificationService;
 import com.kfarms.settings.dto.ChangePasswordRequest;
 import com.kfarms.settings.dto.OrganizationSettingsDto;
 import com.kfarms.settings.dto.UserPreferencesDto;
@@ -18,6 +19,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.util.Map;
 import java.util.Set;
 
 @Service
@@ -58,6 +60,7 @@ public class SettingsService {
     private final AppUserRepository appUserRepository;
     private final PasswordEncoder passwordEncoder;
     private final TenantPlanGuardService tenantPlanGuardService;
+    private final ContactVerificationService contactVerificationService;
 
     public OrganizationSettingsDto getOrganizationSettings() {
         return toOrganizationSettingsDto(requireTenant());
@@ -208,6 +211,22 @@ public class SettingsService {
 
         user.setPassword(passwordEncoder.encode(newPassword));
         appUserRepository.save(user);
+    }
+
+    public Map<String, Object> getAccountContactStatus(Authentication authentication) {
+        return contactVerificationService.buildVerificationPayload(requireUser(authentication), Map.of());
+    }
+
+    public Map<String, Object> updateAccountContact(Authentication authentication, String phoneNumber) {
+        return contactVerificationService.updateContactDetails(requireUser(authentication), phoneNumber);
+    }
+
+    public Map<String, Object> sendAccountContactCodes(Authentication authentication) {
+        return contactVerificationService.sendVerificationCodes(requireUser(authentication));
+    }
+
+    public Map<String, Object> verifyAccountContact(Authentication authentication, String emailCode, String phoneCode) {
+        return contactVerificationService.verifyAuthenticatedUser(requireUser(authentication), emailCode, phoneCode);
     }
 
     private OrganizationSettingsDto toOrganizationSettingsDto(Tenant tenant) {

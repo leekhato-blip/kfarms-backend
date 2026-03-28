@@ -74,7 +74,7 @@ public class ContactVerificationService {
             throw new IllegalArgumentException("Please enter a valid email address.");
         }
 
-        if (!AccountSecuritySupport.isValidPhoneNumber(phoneNumber)) {
+        if (StringUtils.hasText(phoneNumber) && !AccountSecuritySupport.isValidPhoneNumber(phoneNumber)) {
             throw new IllegalArgumentException("Please enter a valid phone number.");
         }
 
@@ -88,14 +88,14 @@ public class ContactVerificationService {
             throw new IllegalArgumentException("Username already taken");
         }
 
-        if (userRepo.findByPhoneNumber(phoneNumber).isPresent()) {
+        if (StringUtils.hasText(phoneNumber) && userRepo.findByPhoneNumber(phoneNumber).isPresent()) {
             throw new IllegalArgumentException("Phone number already registered");
         }
 
         AppUser user = new AppUser();
         user.setUsername(username);
         user.setEmail(email);
-        user.setPhoneNumber(phoneNumber);
+        user.setPhoneNumber(StringUtils.hasText(phoneNumber) ? phoneNumber : null);
         user.setPassword(passwordEncoder.encode(request.password()));
         user.setRole(Role.USER);
         user.setEnabled(true);
@@ -103,87 +103,100 @@ public class ContactVerificationService {
         user.setPhoneVerified(false);
         user.setPlatformAccess(false);
 
-        Map<String, String> preview = new LinkedHashMap<>();
-        String emailCode = issueEmailCode(user);
-        String phoneCode = issuePhoneCode(user);
-        userRepo.save(user);
-
-        if (previewEnabled) {
-            preview.put("emailCode", emailCode);
-            preview.put("phoneCode", phoneCode);
-        }
-
-        sendEmailCode(user, emailCode);
-        sendPhoneCode(user, phoneCode);
-
-        return buildVerificationPayload(user, preview);
-    }
-
-    @Transactional
-    public Map<String, Object> verify(ContactVerificationRequest request) {
-        AppUser user = requireUserByEmail(request.email());
-
-        if (!isEmailVerified(user)) {
-            verifyCode(
-                    valueOrEmpty(request.emailCode()),
-                    user.getEmailVerificationCode(),
-                    user.getEmailVerificationExpiresAt(),
-                    "email"
-            );
-            user.setEmailVerified(true);
-            user.setEmailVerificationCode(null);
-            user.setEmailVerificationExpiresAt(null);
-        }
-
-        if (!isPhoneVerified(user)) {
-            verifyCode(
-                    valueOrEmpty(request.phoneCode()),
-                    user.getPhoneVerificationCode(),
-                    user.getPhoneVerificationExpiresAt(),
-                    "SMS"
-            );
-            user.setPhoneVerified(true);
-            user.setPhoneVerificationCode(null);
-            user.setPhoneVerificationExpiresAt(null);
-        }
-
         AppUser saved = userRepo.save(user);
         return buildVerificationPayload(saved, Map.of());
     }
 
     @Transactional
-    public Map<String, Object> resend(VerificationResendRequest request) {
+    public Map<String, Object> verify(ContactVerificationRequest request) {
         AppUser user = requireUserByEmail(request.email());
-        String channel = normalizeChannel(request.channel());
+        return verifyUser(user, request.emailCode(), request.phoneCode());
+    }
+
+    @Transactional
+    public Map<String, Object> verifyAuthenticatedUser(AppUser user, String emailCode, String phoneCode) {
+        return verifyUser(requireUser(user), emailCode, phoneCode);
+    }
+
+    @Transactional
+    public Map<String, Object> updateContactDetails(AppUser user, String phoneNumberValue) {
+        AppUser managedUser = requireUser(user);
+        String normalizedPhoneNumber = AccountSecuritySupport.normalizePhoneNumber(phoneNumberValue);
+
+        if (!StringUtils.hasText(normalizedPhoneNumber)) {
+            managedUser.setPhoneNumber(null);
+            managedUser.setPhoneVerified(false);
+            managedUser.setPhoneVerificationCode(null);
+            managedUser.setPhoneVerificationExpiresAt(null);
+            return buildVerificationPayload(userRepo.save(managedUser), Map.of());
+        }
+
+        if (!AccountSecuritySupport.isValidPhoneNumber(normalizedPhoneNumber)) {
+            throw new IllegalArgumentException("Please enter a valid phone number.");
+        }
+
+        AppUser existingUser = userRepo.findByPhoneNumber(normalizedPhoneNumber).orElse(null);
+        if (existingUser != null && !existingUser.getId().equals(managedUser.getId())) {
+            throw new IllegalArgumentException("Phone number already registered");
+        }
+
+        boolean phoneChanged = !normalizedPhoneNumber.equals(AccountSecuritySupport.normalizePhoneNumber(managedUser.getPhoneNumber()));
+        managedUser.setPhoneNumber(normalizedPhoneNumber);
+        if (phoneChanged) {
+            managedUser.setPhoneVerified(false);
+            managedUser.setPhoneVerificationCode(null);
+            managedUser.setPhoneVerificationExpiresAt(null);
+        }
+
+        return buildVerificationPayload(userRepo.save(managedUser), Map.of());
+    }
+
+    @Transactional
+    public Map<String, Object> sendVerificationCodes(AppUser user) {
+        return sendVerificationCodes(user, "ALL");
+    }
+
+    @Transactional
+    public Map<String, Object> sendVerificationCodes(AppUser user, String channelValue) {
+        AppUser managedUser = requireUser(user);
+        String channel = normalizeChannel(StringUtils.hasText(channelValue) ? channelValue : "ALL");
         Map<String, String> preview = new LinkedHashMap<>();
 
-        if (("ALL".equals(channel) || "EMAIL".equals(channel)) && !isEmailVerified(user)) {
-            String emailCode = issueEmailCode(user);
+        if (("ALL".equals(channel) || "EMAIL".equals(channel)) && !isEmailVerified(managedUser)) {
+            String emailCode = issueEmailCode(managedUser);
             if (previewEnabled) {
                 preview.put("emailCode", emailCode);
             }
-            sendEmailCode(user, emailCode);
+            sendEmailCode(managedUser, emailCode);
         }
 
-        if (("ALL".equals(channel) || "SMS".equals(channel)) && !isPhoneVerified(user)) {
-            String phoneCode = issuePhoneCode(user);
+        if (("ALL".equals(channel) || "SMS".equals(channel)) && hasPhoneNumber(managedUser) && !isPhoneVerified(managedUser)) {
+            String phoneCode = issuePhoneCode(managedUser);
             if (previewEnabled) {
                 preview.put("phoneCode", phoneCode);
             }
-            sendPhoneCode(user, phoneCode);
+            sendPhoneCode(managedUser, phoneCode);
         }
 
-        AppUser saved = userRepo.save(user);
+        AppUser saved = userRepo.save(managedUser);
         return buildVerificationPayload(saved, preview);
     }
 
+    @Transactional
+    public Map<String, Object> resend(VerificationResendRequest request) {
+        AppUser user = requireUserByEmail(request.email());
+        return sendVerificationCodes(user, request.channel());
+    }
+
     public boolean isFullyVerified(AppUser user) {
-        return isEmailVerified(user) && isPhoneVerified(user);
+        return isEmailVerified(user) && hasPhoneNumber(user) && isPhoneVerified(user);
     }
 
     public Map<String, Object> buildVerificationPayload(AppUser user, Map<String, String> preview) {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("email", user.getEmail());
+        payload.put("phoneNumber", valueOrEmpty(user.getPhoneNumber()));
+        payload.put("hasPhoneNumber", hasPhoneNumber(user));
         payload.put("maskedEmail", AccountSecuritySupport.maskEmail(user.getEmail()));
         payload.put("maskedPhoneNumber", AccountSecuritySupport.maskPhoneNumber(user.getPhoneNumber()));
         payload.put("emailVerified", isEmailVerified(user));
@@ -201,15 +214,54 @@ public class ContactVerificationService {
                 .orElseThrow(() -> new IllegalArgumentException("Account not found."));
     }
 
+    private AppUser requireUser(AppUser user) {
+        if (user == null || user.getId() == null) {
+            throw new IllegalArgumentException("User not authenticated.");
+        }
+
+        return userRepo.findById(user.getId())
+                .orElseThrow(() -> new IllegalArgumentException("Account not found."));
+    }
+
     private boolean isEmailVerified(AppUser user) {
         return !Boolean.FALSE.equals(user.getEmailVerified());
     }
 
     private boolean isPhoneVerified(AppUser user) {
-        if (!StringUtils.hasText(user.getPhoneNumber())) {
-            return true;
+        return hasPhoneNumber(user) && !Boolean.FALSE.equals(user.getPhoneVerified());
+    }
+
+    private boolean hasPhoneNumber(AppUser user) {
+        return StringUtils.hasText(AccountSecuritySupport.normalizePhoneNumber(user.getPhoneNumber()));
+    }
+
+    private Map<String, Object> verifyUser(AppUser user, String emailCode, String phoneCode) {
+        if (!isEmailVerified(user)) {
+            verifyCode(
+                    valueOrEmpty(emailCode),
+                    user.getEmailVerificationCode(),
+                    user.getEmailVerificationExpiresAt(),
+                    "email"
+            );
+            user.setEmailVerified(true);
+            user.setEmailVerificationCode(null);
+            user.setEmailVerificationExpiresAt(null);
         }
-        return !Boolean.FALSE.equals(user.getPhoneVerified());
+
+        if (hasPhoneNumber(user) && !isPhoneVerified(user)) {
+            verifyCode(
+                    valueOrEmpty(phoneCode),
+                    user.getPhoneVerificationCode(),
+                    user.getPhoneVerificationExpiresAt(),
+                    "SMS"
+            );
+            user.setPhoneVerified(true);
+            user.setPhoneVerificationCode(null);
+            user.setPhoneVerificationExpiresAt(null);
+        }
+
+        AppUser saved = userRepo.save(user);
+        return buildVerificationPayload(saved, Map.of());
     }
 
     private String issueEmailCode(AppUser user) {

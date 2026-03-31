@@ -19,28 +19,35 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.util.StringUtils;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/auth") // All routes under /api/auth
+@RequestMapping("/api/auth")
 @RequiredArgsConstructor
 public class AuthController {
+
     private final JwtService jwtService;
     private final AppUserRepository userRepo;
     private final AuthenticationManager authManager;
     private final AuthCookieFactory authCookieFactory;
     private final ContactVerificationService contactVerificationService;
 
-    // === REGISTER NEW USER === //
     @PostMapping("/signup")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> signup(@Valid @RequestBody AuthSignupRequest request){
+    public ResponseEntity<ApiResponse<Map<String, Object>>> signup(
+            @Valid @RequestBody AuthSignupRequest request
+    ) {
         return ResponseEntity.status(HttpStatus.CREATED).body(
                 new ApiResponse<>(
                         true,
@@ -76,29 +83,23 @@ public class AuthController {
         );
     }
 
-    // == Login Existing User (by email or username) == //
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<Object>> login(
             @RequestBody LoginRequest loginRequest,
             HttpServletResponse response
-    ){
-        try{
-            // Authenticate using email or username
+    ) {
+        try {
             Authentication auth = authManager.authenticate(
                     new UsernamePasswordAuthenticationToken(
                             loginRequest.getEmailOrUsername(),
                             loginRequest.getPassword()
                     )
             );
- 
-            SecurityContextHolder.getContext().setAuthentication(auth);
-            String principal = auth.getName(); // returns email from CustomUserDetailsService
 
-            // =========================================
-            // FETCH THE USER FROM THE DATABASE
-            // =========================================
-            AppUser user = userRepo.findByEmail(principal)
-                    .orElseThrow(() -> new RuntimeException("User not found"));
+            SecurityContextHolder.getContext().setAuthentication(auth);
+            String principal = auth.getName();
+
+            AppUser user = findByEmailOrUsername(principal);
 
             if (!contactVerificationService.isFullyVerified(user)) {
                 SecurityContextHolder.clearContext();
@@ -111,14 +112,14 @@ public class AuthController {
             }
 
             UserDto userDto = toUserDto(user);
-            // Generate token
             String jwt = jwtService.generateToken(principal);
 
-            response.addHeader(HttpHeaders.SET_COOKIE, authCookieFactory.createSessionCookie(jwt).toString());
+            response.addHeader(
+                    HttpHeaders.SET_COOKIE,
+                    authCookieFactory.createSessionCookie(jwt).toString()
+            );
 
-            // Optional: can stop returning jwt in body. For now keep it or set it null.
             LoginResponse loginResponse = new LoginResponse(jwt, userDto);
-
             return ResponseEntity.ok(
                     new ApiResponse<>(
                             true,
@@ -126,16 +127,19 @@ public class AuthController {
                             loginResponse
                     )
             );
-        }     catch (AuthenticationException e){
-            return ResponseEntity.status(401)
+        } catch (DisabledException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(new ApiResponse<>(false, "This account is disabled", null));
+        } catch (AuthenticationException e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(new ApiResponse<>(false, "Invalid credentials", null));
         }
     }
+
     @PostMapping("/logout")
     public ResponseEntity<ApiResponse<String>> logout(HttpServletResponse response) {
         response.addHeader(HttpHeaders.SET_COOKIE, authCookieFactory.clearSessionCookie().toString());
-
-        return  ResponseEntity.ok(new ApiResponse<>(true, "Logged out", null));
+        return ResponseEntity.ok(new ApiResponse<>(true, "Logged out", null));
     }
 
     @GetMapping("/me")
@@ -145,11 +149,8 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(new ApiResponse<>(false, "Not authenticated", null));
         }
-        String principal = auth.getName(); // email from CustomUserDetailsService
 
-        AppUser user = userRepo.findByEmail(principal)
-                .orElseThrow(() -> new RuntimeException("User not found"));
-
+        AppUser user = findByEmailOrUsername(auth.getName());
         return ResponseEntity.ok(new ApiResponse<>(true, "OK", toUserDto(user)));
     }
 
@@ -166,5 +167,11 @@ public class AuthController {
                 user.isPlatformAccess(),
                 user.isEnabled()
         );
+    }
+
+    private AppUser findByEmailOrUsername(String principal) {
+        return userRepo.findByEmail(principal)
+                .or(() -> userRepo.findByUsername(principal))
+                .orElseThrow(() -> new RuntimeException("User not found"));
     }
 }

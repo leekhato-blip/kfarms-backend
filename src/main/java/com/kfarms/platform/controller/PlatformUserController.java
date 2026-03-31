@@ -2,14 +2,20 @@ package com.kfarms.platform.controller;
 
 
 import com.kfarms.entity.ApiResponse;
+import com.kfarms.platform.dto.CreatePlatformInviteRequest;
+import com.kfarms.platform.dto.CreatePlatformUserRequest;
+import com.kfarms.platform.dto.PlatformUserInviteDto;
 import com.kfarms.platform.dto.PlatformUserListItemDto;
 import com.kfarms.platform.service.PlatformUserService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -19,6 +25,38 @@ import org.springframework.web.bind.annotation.*;
 public class PlatformUserController {
 
     private final PlatformUserService platformUserService;
+
+    @PostMapping
+    public ResponseEntity<ApiResponse<PlatformUserListItemDto>> createUser(
+            @Valid @RequestBody CreatePlatformUserRequest request
+    ) {
+        PlatformUserListItemDto created = platformUserService.createPlatformUser(request);
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(
+                new ApiResponse<>(
+                        true,
+                        "Platform user created successfully",
+                        created
+                )
+        );
+    }
+
+    @PostMapping("/invites")
+    public ResponseEntity<ApiResponse<PlatformUserInviteDto>> createInvite(
+            @Valid @RequestBody CreatePlatformInviteRequest request,
+            Authentication authentication
+    ) {
+        String inviterIdentity = authentication != null ? authentication.getName() : "SYSTEM";
+        PlatformUserInviteDto invitation = platformUserService.createPlatformInvite(request, inviterIdentity);
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(
+                new ApiResponse<>(
+                        true,
+                        "Platform invite ready",
+                        invitation
+                )
+        );
+    }
 
     @GetMapping
     public ResponseEntity<ApiResponse<Page<PlatformUserListItemDto>>> listUsers(

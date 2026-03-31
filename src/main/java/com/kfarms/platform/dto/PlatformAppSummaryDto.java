@@ -28,5 +28,7 @@ public class PlatformAppSummaryDto {
     private long operatorCount;
     private BigDecimal revenueGenerated;
     private String revenueCurrency;
+    private int sortOrder;
     private List<String> capabilities;
+    private String source;
 }

@@ -26,7 +26,7 @@ class PlatformUserServiceImplTest {
     private final AppUserRepository appUserRepository = mock(AppUserRepository.class);
     private final TenantMemberRepository tenantMemberRepository = mock(TenantMemberRepository.class);
     private final PlatformUserServiceImpl service =
-            new PlatformUserServiceImpl(appUserRepository, tenantMemberRepository);
+            new PlatformUserServiceImpl(appUserRepository, tenantMemberRepository, null, null, null);
 
     @AfterEach
     void clearSecurityContext() {

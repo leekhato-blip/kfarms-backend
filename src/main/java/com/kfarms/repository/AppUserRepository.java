@@ -15,6 +15,7 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long>, JpaSpec
 
     // Fetch all users by role
     List<AppUser> findByRole(Role role);
+    Page<AppUser> findByRole(Role role, Pageable pageable);
     long countByRole(Role role);
     long countByRoleAndEnabledTrue(Role role);
     Optional<AppUser> findByUsername(String username);

@@ -29,9 +29,7 @@ public class CustomUserDetailsService implements UserDetailsService {
                         "ROLE_USER",
                         "ROLE_" + user.getRole().name()
                 )
+                .disabled(!user.isEnabled())
                 .build();
     }
-
-
-
 }

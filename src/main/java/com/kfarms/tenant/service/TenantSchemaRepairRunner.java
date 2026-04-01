@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.core.annotation.Order;
+import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
@@ -18,8 +19,8 @@ public class TenantSchemaRepairRunner implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
-        repairInventoryUniqueness();
-        repairFishPondUniqueness();
+        runSafely("inventory tenant uniqueness", this::repairInventoryUniqueness);
+        runSafely("fish pond tenant uniqueness", this::repairFishPondUniqueness);
     }
 
     private void repairInventoryUniqueness() {
@@ -90,10 +91,45 @@ public class TenantSchemaRepairRunner implements ApplicationRunner {
             return;
         }
 
+        if (hasDuplicateRows(tableName, columnList)) {
+            log.warn(
+                    "Skipping startup constraint {} on {} because duplicate rows already exist for {}. " +
+                            "The application will continue booting, but the data should be cleaned up before retrying.",
+                    constraintName,
+                    tableName,
+                    columnList
+            );
+            return;
+        }
+
         jdbcTemplate.execute(
                 "ALTER TABLE %s ADD CONSTRAINT %s UNIQUE (%s)"
                         .formatted(tableName, constraintName, columnList)
         );
         log.info("Applied tenant-aware unique constraint {} on {}", constraintName, tableName);
+    }
+
+    private boolean hasDuplicateRows(String tableName, String columnList) {
+        Integer duplicateGroupCount = jdbcTemplate.queryForObject(
+                """
+                SELECT COUNT(*)
+                FROM (
+                    SELECT %s
+                    FROM %s
+                    GROUP BY %s
+                    HAVING COUNT(*) > 1
+                ) duplicates
+                """.formatted(columnList, tableName, columnList),
+                Integer.class
+        );
+        return duplicateGroupCount != null && duplicateGroupCount > 0;
+    }
+
+    private void runSafely(String repairName, Runnable repair) {
+        try {
+            repair.run();
+        } catch (DataAccessException ex) {
+            log.warn("Skipping {} during startup because the live database is not ready for that repair yet.", repairName, ex);
+        }
     }
 }

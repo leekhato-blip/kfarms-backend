@@ -21,5 +21,5 @@ ENV SPRING_PROFILES_ACTIVE=prod
 ENV JAVA_OPTS="-XX:+UseSerialGC -XX:TieredStopAtLevel=1 -Xshare:off"
 
 EXPOSE 8080
-HEALTHCHECK --interval=30s --timeout=5s --retries=5 CMD wget -q -O /dev/null http://127.0.0.1:8080/actuator/health || exit 1
-ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar /app/kfarms-backend.jar"]
+HEALTHCHECK --interval=30s --timeout=5s --retries=5 CMD sh -c 'wget -q -O /dev/null "http://127.0.0.1:${PORT:-8080}/actuator/health/readiness" || exit 1'
+ENTRYPOINT ["sh", "-c", "PORT_TO_USE=${PORT:-8080}; exec java $JAVA_OPTS -Dserver.address=0.0.0.0 -Dserver.port=${PORT_TO_USE} -jar /app/kfarms-backend.jar"]

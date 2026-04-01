@@ -7,7 +7,6 @@ public record OrganizationSettingsDto(
         String currency,
         String contactEmail,
         String contactPhone,
-        Boolean criticalSmsAlertsEnabled,
         String address,
         Boolean watermarkEnabled,
         String logoUrl,

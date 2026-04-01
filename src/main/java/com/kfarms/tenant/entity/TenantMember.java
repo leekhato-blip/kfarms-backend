@@ -6,14 +6,12 @@ import com.kfarms.entity.AppUser;
 import com.kfarms.entity.Auditable;
 import jakarta.persistence.*;
 import lombok.Data;
-import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
 import org.hibernate.annotations.Where;
 
 @Entity
 @Data
-@EqualsAndHashCode(callSuper = true)
 @NoArgsConstructor
 @Table(name = "tenant_members", uniqueConstraints = {
         @UniqueConstraint(name = "uk_tenant_user", columnNames = {"tenant_id", "user_id"})

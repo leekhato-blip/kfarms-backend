@@ -6,14 +6,12 @@ import com.kfarms.health.enums.HealthRuleCategory;
 import com.kfarms.health.enums.HealthSeverity;
 import com.kfarms.health.repo.HealthRuleRepo;
 import jakarta.annotation.PostConstruct;
-import lombok.extern.slf4j.Slf4j;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
 
 @Component
-@Slf4j
 @RequiredArgsConstructor
 public class HealthRuleSeeder {
 
@@ -93,7 +91,9 @@ public class HealthRuleSeeder {
 
 
         ));
-        log.info("Health rules seeded");
+
+
+        System.out.println("Health rules seeded");
     }
 
     private HealthRule rule(String code, String title,

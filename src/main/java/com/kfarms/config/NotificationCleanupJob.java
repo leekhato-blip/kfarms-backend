@@ -2,26 +2,22 @@ package com.kfarms.config;
 
 import com.kfarms.repository.NotificationRepository;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.context.event.ApplicationReadyEvent;
-import org.springframework.context.event.EventListener;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import jakarta.annotation.PostConstruct;
 
 import java.time.LocalDateTime;
 
 @Component
-@Slf4j
 @RequiredArgsConstructor
 public class NotificationCleanupJob {
 
     private final NotificationRepository repo;
 
-    @Async
-    @EventListener(ApplicationReadyEvent.class)
+    // 🔥 Runs ONCE immediately when app starts
+    @PostConstruct
     public void runOnStartup() {
-        log.info("Running notification cleanup for items older than 14-30 days");
+        System.out.println("Cleaning notifications older than 14-30 days");
         cleanupOldNotifications();
     }
 

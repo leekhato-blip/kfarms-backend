@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Map;
 
+// TODO: Add role-based access control to this controller
 @RestController
 @RequestMapping("/api/fish-hatch")
 public class FishHatchController {

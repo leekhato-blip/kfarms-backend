@@ -38,7 +38,6 @@ public class NotificationServiceImpl implements NotificationService {
     private final AppUserRepository userRepo;
     private final TenantRepository tenantRepository;
     private final ApplicationEventPublisher publisher;
-    private final CriticalSmsAlertService criticalSmsAlertService;
 
     @Override
     public void createNotification(Long tenantId, String type, String title, String message, AppUser user) {
@@ -97,7 +96,6 @@ public class NotificationServiceImpl implements NotificationService {
         // 🔔 Publish event so Controller can broadcast to clients
         // This triggers the controller’s @EventListener method → sends live update via SSE
         publisher.publishEvent(saved);
-        criticalSmsAlertService.sendIfEligible(saved);
     }
 
     // 🟢 Fetch all notifications

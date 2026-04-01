@@ -1,7 +1,6 @@
 package com.kfarms.config;
 
 import com.kfarms.security.CustomUserDetailsService;
-import com.kfarms.security.DemoAccountMutationFilter;
 import com.kfarms.security.JwtAuthenticationFilter;
 import com.kfarms.security.JwtService;
 import com.kfarms.tenant.service.TenantFilter;
@@ -19,12 +18,10 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
-import org.springframework.util.StringUtils;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import com.kfarms.tenant.service.TenantMembershipFilter;
-import lombok.RequiredArgsConstructor;
 
 
 import java.util.List;
@@ -32,10 +29,7 @@ import java.util.List;
 @Configuration
 @EnableWebSecurity // Enables Spring Security for the Farm app
 @EnableMethodSecurity
-@RequiredArgsConstructor
 public class SecurityConfig {
-
-    private final KfarmsCorsProperties corsProperties;
 
     @Bean
     public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
@@ -51,7 +45,6 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http,
                                            JwtAuthenticationFilter jwtAuthFilter,
-                                           DemoAccountMutationFilter demoAccountMutationFilter,
                                            TenantFilter tenantFilter,
                                            TenantMembershipFilter tenantMembershipFilter) throws Exception {
 
@@ -63,23 +56,20 @@ public class SecurityConfig {
 
                                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                                 .requestMatchers("/auth/**", "/api/auth/**").permitAll()
-                                .requestMatchers("/error", "/error/**").permitAll()
                                 .requestMatchers("/api/billing/paystack/webhook").permitAll()
-                                .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info").permitAll()
 
                                 // tenant bootstrap endpoints (no tenant header required)
                                 .requestMatchers("/api/tenants/**").authenticated()
 
                                 // ROOTS platform endpoints (global admin only)
-                                .requestMatchers("/api/platform/**").hasRole("PLATFORM_ADMIN")
+                                .requestMatchers("/platform/**").hasRole("PLATFORM_ADMIN")
 
                                 // everything else requires login (tenant filters + membership filter will enforce roles)
                                 .anyRequest().authenticated()
                 )
 
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
-                .addFilterAfter(demoAccountMutationFilter, JwtAuthenticationFilter.class)
-                .addFilterAfter(tenantFilter, DemoAccountMutationFilter.class)
+                .addFilterAfter(tenantFilter, JwtAuthenticationFilter.class)
                 .addFilterAfter(tenantMembershipFilter, TenantFilter.class);
 
         // Enable basic auth (username & password via browser/postman)
@@ -97,25 +87,14 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource(){
         CorsConfiguration config = new CorsConfiguration();
         config.setAllowCredentials(true);
-        config.setAllowedOrigins(sanitize(corsProperties.getAllowedOrigins()));
-        config.setAllowedOriginPatterns(sanitize(corsProperties.getAllowedOriginPatterns()));
-        config.setAllowedMethods(sanitize(corsProperties.getAllowedMethods()));
-        config.setAllowedHeaders(sanitize(corsProperties.getAllowedHeaders()));
-        config.setExposedHeaders(sanitize(corsProperties.getExposedHeaders()));
+        config.setAllowedOrigins(List.of("http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:5174", "http://127.0.0.1:5174"));
+        config.setAllowedMethods(List.of("GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"));
+        config.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Tenant-Id"));
+        config.setExposedHeaders(List.of("Set-Cookie"));
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);
 
         return source;
     }
-
-    private List<String> sanitize(List<String> values) {
-        return values == null
-                ? List.of()
-                : values.stream()
-                .map(value -> value == null ? "" : value.trim())
-                .filter(StringUtils::hasText)
-                .distinct()
-                .toList();
     }
-}

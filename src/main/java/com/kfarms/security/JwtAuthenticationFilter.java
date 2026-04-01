@@ -20,15 +20,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private static final Set<String> PUBLIC_AUTH_PATHS = Set.of(
             "/auth/login",
             "/auth/signup",
-            "/auth/verify-contact",
-            "/auth/resend-contact-verification",
             "/auth/forgot-password",
             "/auth/reset-password",
             "/auth/logout",
             "/api/auth/login",
             "/api/auth/signup",
-            "/api/auth/verify-contact",
-            "/api/auth/resend-contact-verification",
             "/api/auth/forgot-password",
             "/api/auth/reset-password",
             "/api/auth/logout"

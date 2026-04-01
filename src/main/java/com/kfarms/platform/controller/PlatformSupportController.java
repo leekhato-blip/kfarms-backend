@@ -1,71 +1,31 @@
 package com.kfarms.platform.controller;
 
-import com.kfarms.dto.SupportTicketMessageRequestDto;
-import com.kfarms.dto.SupportTicketStatusUpdateRequestDto;
 import com.kfarms.entity.ApiResponse;
-import com.kfarms.service.SupportService;
-import jakarta.validation.Valid;
-import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.Authentication;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/platform/support")
-@RequiredArgsConstructor
+@RequestMapping("/platform/support")
 @PreAuthorize("hasRole('PLATFORM_ADMIN')")
 public class PlatformSupportController {
 
-    private final SupportService supportService;
-
     @GetMapping("/tickets")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> listTickets(
-            @RequestParam(required = false) String search,
-            @RequestParam(required = false) String status,
-            @RequestParam(required = false) String lane,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "12") int size
-    ) {
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getTickets() {
         return ResponseEntity.ok(
                 new ApiResponse<>(
                         true,
                         "Platform support tickets fetched successfully",
-                        supportService.getPlatformTickets(search, status, lane, page, size)
-                )
-        );
-    }
-
-    @PostMapping("/tickets/{ticketId}/messages")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> addReply(
-            @PathVariable String ticketId,
-            @Valid @RequestBody SupportTicketMessageRequestDto request,
-            Authentication authentication
-    ) {
-        String actor = authentication != null ? authentication.getName() : "PLATFORM";
-        return ResponseEntity.ok(
-                new ApiResponse<>(
-                        true,
-                        "Platform support reply added successfully",
-                        supportService.addPlatformTicketReply(ticketId, request, actor)
-                )
-        );
-    }
-
-    @PatchMapping("/tickets/{ticketId}")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> updateStatus(
-            @PathVariable String ticketId,
-            @Valid @RequestBody SupportTicketStatusUpdateRequestDto request,
-            Authentication authentication
-    ) {
-        String actor = authentication != null ? authentication.getName() : "PLATFORM";
-        return ResponseEntity.ok(
-                new ApiResponse<>(
-                        true,
-                        "Platform support ticket updated successfully",
-                        supportService.updatePlatformTicketStatus(ticketId, request, actor)
+                        Map.of(
+                                "items", List.of(),
+                                "statusCounts", Map.of(),
+                                "laneCounts", Map.of()
+                        )
                 )
         );
     }

@@ -1,6 +1,0 @@
-target
-.git
-.gitignore
-.idea
-*.log
-hs_err_pid*

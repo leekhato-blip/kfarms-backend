@@ -2,133 +2,150 @@ package com.kfarms.platform.service;
 
 import com.kfarms.entity.AppUser;
 import com.kfarms.entity.Role;
+import com.kfarms.platform.dto.PlatformUserListItemDto;
 import com.kfarms.repository.AppUserRepository;
 import com.kfarms.tenant.repository.TenantMemberRepository;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 
+import java.lang.reflect.Proxy;
 import java.util.List;
-import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PlatformUserServiceImplTest {
 
-    private final AppUserRepository appUserRepository = mock(AppUserRepository.class);
-    private final TenantMemberRepository tenantMemberRepository = mock(TenantMemberRepository.class);
-    private final PlatformUserServiceImpl service =
-            new PlatformUserServiceImpl(appUserRepository, tenantMemberRepository);
+    @Test
+    void searchUsersScopesResultsToPlatformAdmins() {
+        Pageable pageable = PageRequest.of(0, 10);
+        AppUser platformAdmin = platformAdmin(7L, "roots.ops", "platform.ops@demo.kfarms.local", true);
 
-    @AfterEach
-    void clearSecurityContext() {
-        SecurityContextHolder.clearContext();
+        AtomicReference<Role> requestedRole = new AtomicReference<>();
+        AtomicReference<String> requestedSearch = new AtomicReference<>();
+        AtomicReference<Pageable> requestedPageable = new AtomicReference<>();
+
+        AppUserRepository appUserRepository = appUserRepository((role, search, currentPageable) -> {
+            requestedRole.set(role);
+            requestedSearch.set(search);
+            requestedPageable.set(currentPageable);
+            return new PageImpl<>(List.of(platformAdmin), currentPageable, 1);
+        });
+
+        TenantMemberRepository tenantMemberRepository = tenantMemberRepository(userId -> {
+            assertEquals(7L, userId);
+            return 3;
+        });
+
+        PlatformUserServiceImpl service =
+                new PlatformUserServiceImpl(appUserRepository, tenantMemberRepository, null, null, null);
+
+        Page<PlatformUserListItemDto> result = service.searchUsers("  roots  ", pageable);
+
+        assertEquals(Role.PLATFORM_ADMIN, requestedRole.get());
+        assertEquals("roots", requestedSearch.get());
+        assertEquals(pageable, requestedPageable.get());
+        assertEquals(1, result.getTotalElements());
+
+        PlatformUserListItemDto user = result.getContent().get(0);
+        assertEquals(7L, user.getId());
+        assertEquals(Role.PLATFORM_ADMIN, user.getRole());
+        assertEquals(3, user.getTenantCount());
+        assertTrue(user.isActive());
     }
 
     @Test
-    void preventsChangingYourOwnPlatformRole() {
-        AppUser actor = platformAdmin(7L, "root@example.com", true);
-        authenticateAs(actor.getEmail());
+    void searchUsersPassesNullSearchWhenInputIsBlank() {
+        Pageable pageable = PageRequest.of(0, 10);
+        AtomicReference<String> requestedSearch = new AtomicReference<>("not-null");
 
-        when(appUserRepository.findByEmail(actor.getEmail())).thenReturn(Optional.of(actor));
-        when(appUserRepository.findById(actor.getId())).thenReturn(Optional.of(actor));
+        AppUserRepository appUserRepository = appUserRepository((role, search, currentPageable) -> {
+            requestedSearch.set(search);
+            return Page.empty(currentPageable);
+        });
 
-        IllegalArgumentException error = assertThrows(
-                IllegalArgumentException.class,
-                () -> service.setPlatformAdmin(actor.getId(), false)
-        );
+        PlatformUserServiceImpl service =
+                new PlatformUserServiceImpl(appUserRepository, tenantMemberRepository(userId -> 0), null, null, null);
 
-        assertEquals("Use another platform admin account to change your own platform role.", error.getMessage());
-        verify(appUserRepository, never()).save(actor);
+        Page<PlatformUserListItemDto> result = service.searchUsers("   ", pageable);
+
+        assertTrue(result.isEmpty());
+        assertEquals(null, requestedSearch.get());
     }
 
-    @Test
-    void preventsChangingYourOwnEnabledStatus() {
-        AppUser actor = platformAdmin(7L, "root@example.com", true);
-        authenticateAs(actor.getEmail());
+    private AppUserRepository appUserRepository(SearchByRoleHandler handler) {
+        return (AppUserRepository) Proxy.newProxyInstance(
+                AppUserRepository.class.getClassLoader(),
+                new Class[]{AppUserRepository.class},
+                (proxy, method, args) -> {
+                    if ("searchByRole".equals(method.getName())) {
+                        return handler.handle((Role) args[0], (String) args[1], (Pageable) args[2]);
+                    }
 
-        when(appUserRepository.findByEmail(actor.getEmail())).thenReturn(Optional.of(actor));
-        when(appUserRepository.findById(actor.getId())).thenReturn(Optional.of(actor));
+                    if ("toString".equals(method.getName())) {
+                        return "AppUserRepositoryTestProxy";
+                    }
 
-        IllegalArgumentException error = assertThrows(
-                IllegalArgumentException.class,
-                () -> service.setUserEnabled(actor.getId(), false)
-        );
+                    if ("hashCode".equals(method.getName())) {
+                        return System.identityHashCode(proxy);
+                    }
 
-        assertEquals("Use another platform admin account to change your own sign-in access.", error.getMessage());
-        verify(appUserRepository, never()).save(actor);
-    }
+                    if ("equals".equals(method.getName())) {
+                        return proxy == args[0];
+                    }
 
-    @Test
-    void preventsRemovingLastEnabledPlatformAdmin() {
-        AppUser actor = standardUser(3L, "operator@example.com", true);
-        AppUser target = platformAdmin(11L, "solo-admin@example.com", true);
-        authenticateAs(actor.getEmail());
-
-        when(appUserRepository.findByEmail(actor.getEmail())).thenReturn(Optional.of(actor));
-        when(appUserRepository.findById(target.getId())).thenReturn(Optional.of(target));
-        when(appUserRepository.countByRoleAndEnabledTrue(Role.PLATFORM_ADMIN)).thenReturn(1L);
-
-        IllegalArgumentException error = assertThrows(
-                IllegalArgumentException.class,
-                () -> service.setPlatformAdmin(target.getId(), false)
-        );
-
-        assertEquals("At least one enabled platform admin must remain.", error.getMessage());
-        verify(appUserRepository, never()).save(target);
-    }
-
-    @Test
-    void allowsChangingAnotherPlatformAdminWhenCoverageRemains() {
-        AppUser actor = platformAdmin(2L, "owner@example.com", true);
-        AppUser target = platformAdmin(5L, "admin@example.com", true);
-        authenticateAs(actor.getEmail());
-
-        when(appUserRepository.findByEmail(actor.getEmail())).thenReturn(Optional.of(actor));
-        when(appUserRepository.findById(target.getId())).thenReturn(Optional.of(target));
-        when(appUserRepository.countByRoleAndEnabledTrue(Role.PLATFORM_ADMIN)).thenReturn(2L);
-
-        assertDoesNotThrow(() -> service.setPlatformAdmin(target.getId(), false));
-
-        assertEquals(Role.USER, target.getRole());
-        verify(appUserRepository).save(target);
-    }
-
-    private void authenticateAs(String principal) {
-        SecurityContextHolder.getContext().setAuthentication(
-                new UsernamePasswordAuthenticationToken(
-                        principal,
-                        "secret",
-                        List.of(new SimpleGrantedAuthority("ROLE_PLATFORM_ADMIN"))
-                )
+                    throw new UnsupportedOperationException("Unexpected repository call: " + method.getName());
+                }
         );
     }
 
-    private AppUser platformAdmin(Long id, String email, boolean enabled) {
+    private TenantMemberRepository tenantMemberRepository(TenantCountHandler handler) {
+        return (TenantMemberRepository) Proxy.newProxyInstance(
+                TenantMemberRepository.class.getClassLoader(),
+                new Class[]{TenantMemberRepository.class},
+                (proxy, method, args) -> {
+                    if ("countByUser_Id".equals(method.getName())) {
+                        return handler.handle((Long) args[0]);
+                    }
+
+                    if ("toString".equals(method.getName())) {
+                        return "TenantMemberRepositoryTestProxy";
+                    }
+
+                    if ("hashCode".equals(method.getName())) {
+                        return System.identityHashCode(proxy);
+                    }
+
+                    if ("equals".equals(method.getName())) {
+                        return proxy == args[0];
+                    }
+
+                    throw new UnsupportedOperationException("Unexpected repository call: " + method.getName());
+                }
+        );
+    }
+
+    private AppUser platformAdmin(Long id, String username, String email, boolean enabled) {
         AppUser user = new AppUser();
         user.setId(id);
-        user.setUsername(email);
+        user.setUsername(username);
         user.setEmail(email);
         user.setRole(Role.PLATFORM_ADMIN);
         user.setEnabled(enabled);
         return user;
     }
 
-    private AppUser standardUser(Long id, String email, boolean enabled) {
-        AppUser user = new AppUser();
-        user.setId(id);
-        user.setUsername(email);
-        user.setEmail(email);
-        user.setRole(Role.USER);
-        user.setEnabled(enabled);
-        return user;
+    @FunctionalInterface
+    private interface SearchByRoleHandler {
+        Page<AppUser> handle(Role role, String search, Pageable pageable);
+    }
+
+    @FunctionalInterface
+    private interface TenantCountHandler {
+        int handle(Long userId);
     }
 }

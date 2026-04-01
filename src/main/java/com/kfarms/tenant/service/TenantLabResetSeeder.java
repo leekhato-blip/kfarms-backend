@@ -117,11 +117,6 @@ public class TenantLabResetSeeder implements ApplicationRunner {
         createUser("roots.support", "support@demo.kfarms.local", Role.USER, true);
         createUser("roots.billing", "billing@demo.kfarms.local", Role.USER, true);
         createUser("roots.success", "success@demo.kfarms.local", Role.USER, true);
-        createUser("roots.compliance", "compliance@demo.kfarms.local", Role.USER, true);
-        createUser("roots.finance", "finance@demo.kfarms.local", Role.USER, true);
-        createUser("roots.onboarding", "onboarding@demo.kfarms.local", Role.USER, true);
-        createUser("roots.growth", "growth@demo.kfarms.local", Role.USER, true);
-        createUser("roots.logistics", "logistics@demo.kfarms.local", Role.USER, true);
 
         Tenant umarTenant = createTenant(
                 "Umar Poultry Farm",
@@ -165,7 +160,7 @@ public class TenantLabResetSeeder implements ApplicationRunner {
         createSubscription(deltaTenant, TenantPlan.ENTERPRISE, "120000");
         seedEnterpriseTenant(deltaTenant);
 
-        log.info("Tenant lab reset completed with 3 clean tenants, 2 platform admins, 9 platform staff users, and seeded farm data.");
+        log.info("Tenant lab reset completed with 3 clean tenants, 2 platform admins, and seeded farm data.");
     }
 
     private OwnerSnapshot snapshotPlatformOwner() {
@@ -230,7 +225,6 @@ public class TenantLabResetSeeder implements ApplicationRunner {
         user.setEmail(email);
         user.setPassword(passwordHash);
         user.setRole(role);
-        user.setPlatformAccess(role == Role.PLATFORM_ADMIN || username.startsWith("roots."));
         user.setEnabled(enabled);
         stamp(user);
         return appUserRepository.save(user);

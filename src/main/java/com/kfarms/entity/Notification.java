@@ -25,7 +25,6 @@ public class Notification {
     @Enumerated(EnumType.STRING)
     private NotificationType type;     // FEED, FISH, FINANCE, etc.
 
-    @Builder.Default
     private Boolean read = false;
 
     @Builder.Default

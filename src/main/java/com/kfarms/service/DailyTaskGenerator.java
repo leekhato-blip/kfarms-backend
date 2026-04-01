@@ -6,10 +6,8 @@ import com.kfarms.entity.TaskSource;
 import com.kfarms.entity.TaskStatus;
 import com.kfarms.repository.RecurringTaskRulesRepo;
 import com.kfarms.repository.TaskRepository;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
-import org.springframework.boot.context.event.ApplicationReadyEvent;
-import org.springframework.context.event.EventListener;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -25,8 +23,7 @@ public class DailyTaskGenerator {
     private final RecurringTaskRulesRepo rulesRepo;
     private final TaskRepository taskRepo;
 
-    @Async
-    @EventListener(ApplicationReadyEvent.class)
+    @PostConstruct
     public void initToday() {
         createTasksFor(LocalDate.now());
     }

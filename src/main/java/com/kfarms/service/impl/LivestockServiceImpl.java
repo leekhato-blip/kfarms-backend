@@ -268,9 +268,23 @@ public class LivestockServiceImpl implements LivestockService {
                 ));
         summary.put("countByType", countByType);
 
-        // Notifications are handled on write actions, not summary reads.
-        // Summary endpoints must stay side-effect free so a brand-new or empty
-        // workspace does not generate misleading alerts just by opening the page.
+        // ==== NOTIFICATIONS ====
+        if (totalQuantity < 50) {
+            notification.createNotification(
+                    tenantId,
+                    "LIVESTOCK",
+                    "Low Livestock Count",
+                    "Total livestock count has dropped below 50. Please inspect",
+                    null);
+        }
+        if (totalMortality > 20) {
+            notification.createNotification(
+                    tenantId,
+                    "LIVESTOCK",
+                    "High Mortality Alert",
+                    "More than 20 deaths record. Investigate possible disease or stress factors",
+                    null);
+        }
 
         return summary;
     }

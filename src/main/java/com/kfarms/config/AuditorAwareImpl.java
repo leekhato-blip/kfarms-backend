@@ -17,6 +17,8 @@ public class AuditorAwareImpl implements AuditorAware<String> {
         if (auth == null || !auth.isAuthenticated() || auth.getPrincipal().equals("anonymousUser")){
             return Optional.empty(); // Only audit when logged in
         }
-        return Optional.of(auth.getName());
+        String username = auth.getName();
+        System.out.println("✅ Auditor is: " + username);
+        return Optional.of(username);
     }
 }

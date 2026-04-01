@@ -4,7 +4,6 @@ package com.kfarms.tenant.entity;
 import com.kfarms.entity.Auditable;
 import jakarta.persistence.*;
 import lombok.Data;
-import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.Where;
 
@@ -12,7 +11,6 @@ import java.time.LocalDateTime;
 
 @Entity
 @Data
-@EqualsAndHashCode(callSuper = true)
 @NoArgsConstructor
 @Table(name = "tenant_invitations", indexes = {
         @Index(name = "idx_invite_token", columnList = "token", unique = true),

@@ -76,13 +76,6 @@ public interface SalesRepository
             @Param("end") LocalDate end
     );
 
-    @Query("""
-    SELECT COALESCE(SUM(s.totalPrice), 0)
-    FROM Sales s
-    WHERE (s.deleted = false OR s.deleted IS NULL)
-    """)
-    BigDecimal sumAllActiveRevenue();
-
     @Query(
             value = """
             select to_char(s.sales_date, 'YYYY-MM') as month, sum(s.total_price)

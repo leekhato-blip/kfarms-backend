@@ -11,7 +11,6 @@ import java.time.LocalDateTime;
 
 // SALES/DISTRIBUTIONS
 @Data
-@EqualsAndHashCode(callSuper = true)
 @Entity
 @Table(name = "sales")
 @RequiredArgsConstructor

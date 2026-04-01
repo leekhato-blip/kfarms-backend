@@ -19,7 +19,6 @@ public class RecurringTaskRule {
     private String title;                   // "Feed Layers", "Collect Eggs"
     private String entityType;              // "LIVESTOCK", "POND", "FARM"
     private Long entityId;                  // optional
-    @Builder.Default
     private boolean enabled = true;
 
     @Enumerated(EnumType.STRING)

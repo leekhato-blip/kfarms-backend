@@ -4,7 +4,6 @@ import com.kfarms.mapper.LivestockMapper;
 import com.kfarms.tenant.entity.Tenant;
 import jakarta.persistence.*;
 import lombok.Data;
-import lombok.EqualsAndHashCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.convert.ReadingConverter;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
@@ -14,7 +13,6 @@ import java.time.LocalDate;
 @Entity
 @Table(name = "egg_production")
 @Data
-@EqualsAndHashCode(callSuper = true)
 @RequiredArgsConstructor
 @EntityListeners(AuditingEntityListener.class)
 public class EggProduction extends Auditable {

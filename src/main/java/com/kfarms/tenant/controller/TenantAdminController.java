@@ -3,7 +3,6 @@ package com.kfarms.tenant.controller;
 import com.kfarms.entity.ApiResponse;
 import com.kfarms.entity.AppUser;
 import com.kfarms.repository.AppUserRepository;
-import com.kfarms.security.UserHierarchyPolicy;
 import com.kfarms.tenant.entity.Invitation;
 import com.kfarms.tenant.entity.Tenant;
 import com.kfarms.tenant.entity.TenantAuditAction;
@@ -64,11 +63,6 @@ public class TenantAdminController {
         return planGuardService.requireCurrentTenant();
     }
 
-    private TenantMember requireCurrentMembership(Tenant tenant, AppUser actor) {
-        return memberRepo.findByTenant_IdAndUser_IdAndActiveTrue(tenant.getId(), actor.getId())
-                .orElseThrow(() -> new IllegalArgumentException("Tenant membership not found."));
-    }
-
     private String actorLabel(AppUser actor) {
         if (actor == null) return "SYSTEM";
         String email = actor.getEmail();
@@ -97,22 +91,6 @@ public class TenantAdminController {
         }
         String normalized = value.trim();
         return normalized.isBlank() ? null : normalized;
-    }
-
-    private void ensureCanManageMember(TenantMember actorMembership, TenantMember target, String message) {
-        if (actorMembership.getId() != null && actorMembership.getId().equals(target.getId())) {
-            throw new IllegalArgumentException("Use another admin account to change your own access.");
-        }
-
-        if (!UserHierarchyPolicy.canManageTenantMember(actorMembership.getRole(), target.getRole())) {
-            throw new IllegalArgumentException(message);
-        }
-    }
-
-    private void ensureCanAssignRole(TenantMember actorMembership, TenantRole targetRole, String message) {
-        if (!UserHierarchyPolicy.canAssignTenantRole(actorMembership.getRole(), targetRole)) {
-            throw new IllegalArgumentException(message);
-        }
     }
 
     private Map<String, Object> memberRow(TenantMember member) {
@@ -242,15 +220,9 @@ public class TenantAdminController {
                 "You do not have permission to invite teammates."
         );
         AppUser actor = requireCurrentUser(auth);
-        TenantMember actorMembership = requireCurrentMembership(tenant, actor);
         String actorName = actorLabel(actor);
         String email = request.email().trim().toLowerCase();
         TenantRole role = parseInvitationRole(request.role());
-        ensureCanAssignRole(
-                actorMembership,
-                role,
-                "You can only invite teammates below your own hierarchy level."
-        );
 
         AppUser invitedUser = userRepo.findByEmail(email).orElse(null);
         if (invitedUser != null) {
@@ -315,16 +287,10 @@ public class TenantAdminController {
                 "You do not have permission to revoke invitations."
         );
         AppUser actor = requireCurrentUser(auth);
-        TenantMember actorMembership = requireCurrentMembership(tenant, actor);
         String actorName = actorLabel(actor);
 
         Invitation invitation = invitationRepo.findByIdAndTenant_IdAndAcceptedFalse(invitationId, tenant.getId())
                 .orElseThrow(() -> new IllegalArgumentException("Invitation not found"));
-        ensureCanAssignRole(
-                actorMembership,
-                invitation.getRole(),
-                "You can only revoke invitations below your own hierarchy level."
-        );
 
         auditLogService.record(
                 tenant,
@@ -393,7 +359,6 @@ public class TenantAdminController {
         );
         Long tenantId = tenant.getId();
         AppUser actor = requireCurrentUser(auth);
-        TenantMember actorMembership = requireCurrentMembership(tenant, actor);
 
         TenantMember target = memberRepo.findByIdAndTenant_Id(memberId, tenantId)
                 .orElseThrow(() -> new IllegalArgumentException("Member not found"));
@@ -409,17 +374,6 @@ public class TenantAdminController {
             return ResponseEntity.badRequest()
                     .body(new ApiResponse<>(false, "Use ownership transfer for OWNER role", null));
         }
-
-        ensureCanManageMember(
-                actorMembership,
-                target,
-                "You can only manage teammates below your own hierarchy level."
-        );
-        ensureCanAssignRole(
-                actorMembership,
-                req.role(),
-                "You can only assign roles below your own hierarchy level."
-        );
 
         TenantRole previousRole = target.getRole();
         target.setRole(req.role());
@@ -465,7 +419,6 @@ public class TenantAdminController {
         );
 
         AppUser actor = requireCurrentUser(auth);
-        TenantMember actorMembership = requireCurrentMembership(tenant, actor);
         String actorName = actorLabel(actor);
 
         TenantMember target = memberRepo.findByIdAndTenant_Id(memberId, tenant.getId())
@@ -475,12 +428,6 @@ public class TenantAdminController {
             return ResponseEntity.badRequest()
                     .body(new ApiResponse<>(false, "Cannot change OWNER access profile here", null));
         }
-
-        ensureCanManageMember(
-                actorMembership,
-                target,
-                "You can only manage teammates below your own hierarchy level."
-        );
 
         List<String> requestedPermissions = req.permissions() == null
                 ? List.of()
@@ -533,7 +480,6 @@ public class TenantAdminController {
         );
         Long tenantId = tenant.getId();
         AppUser actor = requireCurrentUser(auth);
-        TenantMember actorMembership = requireCurrentMembership(tenant, actor);
 
         TenantMember target = memberRepo.findByIdAndTenant_Id(memberId, tenantId)
                 .orElseThrow(() -> new IllegalArgumentException("Member not found"));
@@ -542,12 +488,6 @@ public class TenantAdminController {
             return ResponseEntity.badRequest()
                     .body(new ApiResponse<>(false, "Cannot deactivate the OWNER", null));
         }
-
-        ensureCanManageMember(
-                actorMembership,
-                target,
-                "You can only manage teammates below your own hierarchy level."
-        );
 
         if (Boolean.TRUE.equals(req.active()) && !Boolean.TRUE.equals(target.getActive())) {
             planGuardService.ensureSeatCapacityForActivation(tenant);
@@ -598,7 +538,6 @@ public class TenantAdminController {
                 "You do not have permission to remove members."
         );
         AppUser actor = requireCurrentUser(auth);
-        TenantMember actorMembership = requireCurrentMembership(tenant, actor);
         String actorName = actorLabel(actor);
 
         TenantMember target = memberRepo.findByIdAndTenant_Id(memberId, tenant.getId())
@@ -608,12 +547,6 @@ public class TenantAdminController {
             return ResponseEntity.badRequest()
                     .body(new ApiResponse<>(false, "Cannot remove the OWNER", null));
         }
-
-        ensureCanManageMember(
-                actorMembership,
-                target,
-                "You can only manage teammates below your own hierarchy level."
-        );
 
         auditLogService.record(
                 tenant,

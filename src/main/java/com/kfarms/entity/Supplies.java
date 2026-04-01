@@ -11,7 +11,6 @@ import java.time.LocalDateTime;
 
 // PURCHASES
 @Data
-@EqualsAndHashCode(callSuper = true)
 @Entity
 @Table(name = "supplies")
 @RequiredArgsConstructor

@@ -10,7 +10,6 @@ import java.time.LocalDate;
 @Data
 @Entity
 @Table(name = "fish_hatch_records")
-@EqualsAndHashCode(callSuper = true)
 @AllArgsConstructor
 @NoArgsConstructor
 public class FishHatch extends Auditable{

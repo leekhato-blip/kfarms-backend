@@ -1,7 +1,6 @@
 package com.kfarms.health.service;
 
 import com.kfarms.health.dto.AdviceContext;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -14,16 +13,15 @@ import java.util.List;
 import java.util.Map;
 
 @Service
-@Slf4j
 public class HealthAdviceService {
 
     @Value("${kfarms.ai.enabled:false}")
     private boolean aiEnabled;
 
-    @Value("${openai.api.key:}")
+    @Value("${openai.api.key}")
     private String apiKey;
 
-    @Value("${openai.model:gpt-4o-mini}")
+    @Value("${openai.model}")
     private String model;
 
     private static final String OPENAI_URL =
@@ -37,7 +35,6 @@ public class HealthAdviceService {
         try {
             return aiAdvice(context);
         }catch (Exception e) {
-            log.warn("AI advice failed, falling back to rule-based advice", e);
             return ruleBasedAdvice(context);
         }
     }
@@ -97,7 +94,7 @@ public class HealthAdviceService {
             return fallbackAdvice();
 
         } catch (Exception e) {
-            log.warn("OpenAI advice request failed, using fallback advice", e);
+            e.printStackTrace();
             return fallbackAdvice();
         }
 

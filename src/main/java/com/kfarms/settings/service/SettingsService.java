@@ -2,8 +2,6 @@ package com.kfarms.settings.service;
 
 import com.kfarms.entity.AppUser;
 import com.kfarms.repository.AppUserRepository;
-import com.kfarms.security.AccountSecuritySupport;
-import com.kfarms.security.ContactVerificationService;
 import com.kfarms.settings.dto.ChangePasswordRequest;
 import com.kfarms.settings.dto.OrganizationSettingsDto;
 import com.kfarms.settings.dto.UserPreferencesDto;
@@ -19,7 +17,6 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
-import java.util.Map;
 import java.util.Set;
 
 @Service
@@ -60,7 +57,6 @@ public class SettingsService {
     private final AppUserRepository appUserRepository;
     private final PasswordEncoder passwordEncoder;
     private final TenantPlanGuardService tenantPlanGuardService;
-    private final ContactVerificationService contactVerificationService;
 
     public OrganizationSettingsDto getOrganizationSettings() {
         return toOrganizationSettingsDto(requireTenant());
@@ -73,33 +69,8 @@ public class SettingsService {
         tenant.setName(requireText(request.organizationName(), "Workspace name is required."));
         tenant.setTimezone(orDefault(request.timezone(), DEFAULT_TIMEZONE));
         tenant.setCurrency(orDefault(request.currency(), DEFAULT_CURRENCY).toUpperCase());
-        String contactEmail = emptyToNull(request.contactEmail());
-        if (contactEmail != null) {
-            contactEmail = AccountSecuritySupport.normalizeEmail(contactEmail);
-            if (!AccountSecuritySupport.isValidEmail(contactEmail)) {
-                throw new IllegalArgumentException("Add a valid workspace contact email.");
-            }
-        }
-
-        String contactPhone = emptyToNull(request.contactPhone());
-        if (contactPhone != null) {
-            contactPhone = AccountSecuritySupport.normalizePhoneNumber(contactPhone);
-            if (!AccountSecuritySupport.isValidPhoneNumber(contactPhone)) {
-                throw new IllegalArgumentException("Add a valid workspace contact phone.");
-            }
-        }
-
-        tenant.setContactEmail(contactEmail);
-        tenant.setContactPhone(contactPhone);
-        boolean criticalSmsAlertsEnabled = resolveBoolean(
-                request.criticalSmsAlertsEnabled(),
-                tenant.getCriticalSmsAlertsEnabled(),
-                false
-        );
-        if (criticalSmsAlertsEnabled && emptyToNull(tenant.getContactPhone()) == null) {
-            throw new IllegalArgumentException("Add a workspace contact phone before enabling critical SMS alerts.");
-        }
-        tenant.setCriticalSmsAlertsEnabled(criticalSmsAlertsEnabled);
+        tenant.setContactEmail(emptyToNull(request.contactEmail()));
+        tenant.setContactPhone(emptyToNull(request.contactPhone()));
         tenant.setAddress(emptyToNull(request.address()));
         tenant.setWatermarkEnabled(resolveBoolean(
                 request.watermarkEnabled(),
@@ -191,9 +162,11 @@ public class SettingsService {
 
         Tenant tenant = requireTenant();
         boolean strongPasswordPolicy = Boolean.TRUE.equals(tenant.getStrongPasswordPolicyEnabled());
-        int minimumLength = strongPasswordPolicy ? 12 : AccountSecuritySupport.MIN_PASSWORD_LENGTH;
+        int minimumLength = strongPasswordPolicy ? 12 : 8;
 
-        AccountSecuritySupport.validatePassword(newPassword, minimumLength);
+        if (newPassword.length() < minimumLength) {
+            throw new IllegalArgumentException("New password must be at least " + minimumLength + " characters.");
+        }
 
         if (strongPasswordPolicy && !matchesStrongPasswordPolicy(newPassword)) {
             throw new IllegalArgumentException(
@@ -213,22 +186,6 @@ public class SettingsService {
         appUserRepository.save(user);
     }
 
-    public Map<String, Object> getAccountContactStatus(Authentication authentication) {
-        return contactVerificationService.buildVerificationPayload(requireUser(authentication), Map.of());
-    }
-
-    public Map<String, Object> updateAccountContact(Authentication authentication, String phoneNumber) {
-        return contactVerificationService.updateContactDetails(requireUser(authentication), phoneNumber);
-    }
-
-    public Map<String, Object> sendAccountContactCodes(Authentication authentication) {
-        return contactVerificationService.sendVerificationCodes(requireUser(authentication));
-    }
-
-    public Map<String, Object> verifyAccountContact(Authentication authentication, String emailCode, String phoneCode) {
-        return contactVerificationService.verifyAuthenticatedUser(requireUser(authentication), emailCode, phoneCode);
-    }
-
     private OrganizationSettingsDto toOrganizationSettingsDto(Tenant tenant) {
         return new OrganizationSettingsDto(
                 safe(tenant.getName()),
@@ -237,7 +194,6 @@ public class SettingsService {
                 orDefault(tenant.getCurrency(), DEFAULT_CURRENCY).toUpperCase(),
                 safe(tenant.getContactEmail()),
                 safe(tenant.getContactPhone()),
-                resolveBoolean(tenant.getCriticalSmsAlertsEnabled(), null, false),
                 safe(tenant.getAddress()),
                 resolveBoolean(tenant.getWatermarkEnabled(), null, true),
                 safe(tenant.getLogoUrl()),

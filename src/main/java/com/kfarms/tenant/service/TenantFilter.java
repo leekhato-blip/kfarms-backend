@@ -28,10 +28,9 @@ public class TenantFilter extends OncePerRequestFilter {
                                     HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
 
-        boolean tenantContextBound = false;
         String uri = request.getRequestURI();
 
-        if (uri.startsWith("/platform") || uri.startsWith("/api/platform") || uri.startsWith("/error")) {
+        if (uri.startsWith("/platform")) {
             filterChain.doFilter(request, response);
             return;
         }
@@ -47,11 +46,9 @@ public class TenantFilter extends OncePerRequestFilter {
             // Skip tenant header enforcement for auth + platform + tenant bootstrap
             if (path.startsWith("/auth/")
                     || path.startsWith("/api/auth")
-                    || path.startsWith("/api/platform")
                     || path.equals("/api/billing/paystack/webhook")
                     || path.startsWith("/api/tenants")
-                    || path.startsWith("/platform")
-                    || path.startsWith("/error")) {
+                    || path.startsWith("/platform")) {
                 filterChain.doFilter(request, response);
                 return;
             }
@@ -95,14 +92,11 @@ public class TenantFilter extends OncePerRequestFilter {
             }
 
             TenantContext.setTenantId(tenantId);
-            tenantContextBound = true;
 
             filterChain.doFilter(request, response);
 
         } finally {
-            if (tenantContextBound) {
-                TenantContext.clear();
-            }
+            TenantContext.clear();
         }
     }
 }

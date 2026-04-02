@@ -362,7 +362,7 @@ public class FishPondServiceImpl implements FishPondService {
         Map<String, Object> alerts = new HashMap<>();
 
         // 🐟 Low Stock Alert
-        if (totalFishes < 100) {
+        if (!all.isEmpty() && totalFishes > 0 && totalFishes < 100) {
             alerts.put("fishLow", "Fish stock is below normal levels!");
             notification.createNotification(
                     tenantId,

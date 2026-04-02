@@ -280,20 +280,6 @@ public class SalesServiceImpl implements SalesService {
             );
         }
 
-        // No sales in last 7 days
-        boolean noSalesLast7Days = all.stream()
-                .noneMatch(s -> s.getSalesDate() != null &&
-                        !s.getSalesDate().isBefore(sevenDaysAgo));
-
-        if (noSalesLast7Days) {
-            notification.createNotification(
-                    tenantId,
-                    "FINANCE",
-                    "No Sales Activity",
-                    "No sales have been recorded in the last 7 days.",
-                    null
-            );
-        }
         return summary;
     }
 

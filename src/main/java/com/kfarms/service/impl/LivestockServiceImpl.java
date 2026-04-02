@@ -269,7 +269,7 @@ public class LivestockServiceImpl implements LivestockService {
         summary.put("countByType", countByType);
 
         // ==== NOTIFICATIONS ====
-        if (totalQuantity < 50) {
+        if (!all.isEmpty() && totalQuantity > 0 && totalQuantity < 50) {
             notification.createNotification(
                     tenantId,
                     "LIVESTOCK",
@@ -277,7 +277,7 @@ public class LivestockServiceImpl implements LivestockService {
                     "Total livestock count has dropped below 50. Please inspect",
                     null);
         }
-        if (totalMortality > 20) {
+        if (!all.isEmpty() && totalQuantity > 0 && totalMortality > 20) {
             notification.createNotification(
                     tenantId,
                     "LIVESTOCK",

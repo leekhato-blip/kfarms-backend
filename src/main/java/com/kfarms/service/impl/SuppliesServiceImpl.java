@@ -271,7 +271,7 @@ public class SuppliesServiceImpl implements SuppliesService {
         summary.put("amountBySupplier", amountBySupplier);
 
         // ==== ALERTS ====
-        if (totalQuantity < 10) {
+        if (!all.isEmpty() && totalQuantity > 0 && totalQuantity < 10) {
             notification.createNotification(
                     tenantId,
                     "SUPPLIES",
@@ -282,7 +282,7 @@ public class SuppliesServiceImpl implements SuppliesService {
         }
 
         BigDecimal limit = new BigDecimal("500000");
-        if (totalAmount.compareTo(limit) > 0) {
+        if (!all.isEmpty() && totalAmount.compareTo(limit) > 0) {
             notification.createNotification(
                     tenantId,
                     "FINANCE",
@@ -293,23 +293,6 @@ public class SuppliesServiceImpl implements SuppliesService {
         }
 
         // 🟣 last supply date
-        all.stream()
-                .map(Supplies::getSupplyDate)
-                .filter(Objects::nonNull)
-                .max(LocalDate::compareTo)
-                .ifPresent(lastDate -> {
-                    if (lastDate.isBefore(LocalDate.now().minusDays(30))) {
-                        notification.createNotification(
-                                tenantId,
-                                "SUPPLIES",
-                                "No Recent Supply",
-                                "No new supplies have been recorded since " + lastDate,
-                                null
-                        );
-                    }
-                });
-
-
         return summary;
     }
 

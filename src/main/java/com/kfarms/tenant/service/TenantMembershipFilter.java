@@ -31,6 +31,12 @@ public class TenantMembershipFilter extends OncePerRequestFilter {
     private final TenantMemberRepository memberRepo;
     private final AppUserRepository appUserRepo;
 
+    private boolean isPublicActuatorPath(String path) {
+        return "/actuator".equals(path)
+                || "/actuator/info".equals(path)
+                || path.startsWith("/actuator/health");
+    }
+
     @Override
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
@@ -38,7 +44,10 @@ public class TenantMembershipFilter extends OncePerRequestFilter {
 
         String uri = request.getRequestURI();
 
-        if (uri.startsWith("/platform")) {
+        if (uri.startsWith("/platform")
+                || uri.startsWith("/api/platform")
+                || uri.startsWith("/error")
+                || isPublicActuatorPath(uri)) {
             filterChain.doFilter(request, response);
             return;
         }
@@ -54,9 +63,12 @@ public class TenantMembershipFilter extends OncePerRequestFilter {
         // Skip tenant membership enforcement for auth + tenant bootstrap + platform
         if (path.startsWith("/auth/")
                 || path.startsWith("/api/auth")
+                || path.startsWith("/api/platform")
                 || path.equals("/api/billing/paystack/webhook")
                 || path.startsWith("/api/tenants")     // list/create tenants, accept invites, etc.
-                || path.startsWith("/platform")) {
+                || path.startsWith("/platform")
+                || path.startsWith("/error")
+                || isPublicActuatorPath(path)) {
             filterChain.doFilter(request, response);
             return;
         }

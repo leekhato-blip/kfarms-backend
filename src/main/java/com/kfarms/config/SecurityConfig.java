@@ -24,6 +24,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import com.kfarms.tenant.service.TenantMembershipFilter;
 
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Configuration
@@ -87,7 +88,23 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource(){
         CorsConfiguration config = new CorsConfiguration();
         config.setAllowCredentials(true);
-        config.setAllowedOrigins(List.of("http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:5174", "http://127.0.0.1:5174"));
+        List<String> allowedOriginPatterns = new ArrayList<>(List.of(
+                "http://localhost:5173",
+                "http://127.0.0.1:5173",
+                "http://localhost:5174",
+                "http://127.0.0.1:5174",
+                "https://*.onrender.com"
+        ));
+        String extraOrigins = System.getenv("KFARMS_CORS_ALLOWED_ORIGINS");
+        if (extraOrigins != null && !extraOrigins.isBlank()) {
+            for (String origin : extraOrigins.split(",")) {
+                String trimmed = origin.trim();
+                if (!trimmed.isBlank()) {
+                    allowedOriginPatterns.add(trimmed);
+                }
+            }
+        }
+        config.setAllowedOriginPatterns(allowedOriginPatterns);
         config.setAllowedMethods(List.of("GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Tenant-Id"));
         config.setExposedHeaders(List.of("Set-Cookie"));

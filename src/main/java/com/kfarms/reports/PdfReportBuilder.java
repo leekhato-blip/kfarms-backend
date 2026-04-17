@@ -3,20 +3,20 @@ package com.kfarms.reports;
 import com.lowagie.text.*;
 import com.lowagie.text.Font;
 import com.lowagie.text.pdf.*;
+import lombok.extern.slf4j.Slf4j;
 
 import java.awt.*;
 import java.io.ByteArrayOutputStream;
-import java.lang.reflect.Field;
 import java.time.LocalDate;
-import java.util.ArrayList;
 import java.util.List;
 
+@Slf4j
 public class PdfReportBuilder {
 
     private static final Color KFARMS_PURPLE = new Color(107, 70, 193); // 💜 Purple
 
-    public static <T> byte[] buildReport(List<T> dataList, String title, List<String> headers) throws Exception {
-        return buildReport(dataList, title, headers, null);
+    public static <T> byte[] buildReport(List<T> dataList, String title, List<ReportColumn<T>> columns) throws Exception {
+        return buildReport(dataList, title, columns, null);
     }
 
     public record ReportBranding(
@@ -29,12 +29,12 @@ public class PdfReportBuilder {
     public static <T> byte[] buildReport(
             List<T> dataList,
             String title,
-            List<String> headers,
+            List<ReportColumn<T>> columns,
             ReportBranding branding
     ) throws Exception {
 
-        if (headers == null || headers.isEmpty()) {
-            throw new IllegalArgumentException("Headers cannot be null or empty");
+        if (columns == null || columns.isEmpty()) {
+            throw new IllegalArgumentException("Columns cannot be null or empty");
         }
 
         Document document = new Document(PageSize.A4.rotate());
@@ -62,10 +62,10 @@ public class PdfReportBuilder {
             Font cellFont = new Font(base, 11, Font.NORMAL, Color.BLACK);
             Font footerFont = new Font(base, 9, Font.ITALIC, Color.GRAY);
 
-            // ✅ DEBUG LOGS
-            System.out.println("📄 Building PDF report for: " + title);
-            System.out.println("Headers: " + headers);
-            System.out.println("Records: " + (dataList != null ? dataList.size() : 0));
+            log.debug("Building PDF report '{}' with {} header(s) and {} record(s)",
+                    title,
+                    columns.size(),
+                    dataList != null ? dataList.size() : 0);
 
             // ---------- TITLE ----------
             String resolvedTitle = organizationName.isBlank() ? title : organizationName + " • " + title;
@@ -75,14 +75,14 @@ public class PdfReportBuilder {
             document.add(titlePara);
 
             // ---------- TABLE ----------
-            PdfPTable table = new PdfPTable(headers.size());
+            PdfPTable table = new PdfPTable(columns.size());
             table.setWidthPercentage(100);
             table.setSpacingBefore(10f);
             table.setSpacingAfter(10f);
 
             // ---------- HEADER ROW ----------
-            for (String header : headers) {
-                PdfPCell cell = new PdfPCell(new Phrase(header, headerFont));
+            for (ReportColumn<T> column : columns) {
+                PdfPCell cell = new PdfPCell(new Phrase(column.header(), headerFont));
                 cell.setHorizontalAlignment(Element.ALIGN_CENTER);
                 cell.setBackgroundColor(headerColor);
                 cell.setPadding(6f);
@@ -91,19 +91,13 @@ public class PdfReportBuilder {
 
             // ---------- DATA ROWS ----------
             if (dataList != null && !dataList.isEmpty()) {
-                for (Object obj : dataList) {
-                    Field[] fields = getAllFields(obj.getClass());
-                    for (int i = 0; i < headers.size(); i++) {
+                for (T obj : dataList) {
+                    for (ReportColumn<T> column : columns) {
                         PdfPCell cell;
                         try {
-                            if (i < fields.length) {
-                                fields[i].setAccessible(true);
-                                Object value = fields[i].get(obj);
-                                String text = (value != null) ? value.toString() : "-";
-                                cell = new PdfPCell(new Phrase(text, cellFont));
-                            } else {
-                                cell = new PdfPCell(new Phrase("-", cellFont));
-                            }
+                            Object value = column.valueFor(obj);
+                            String text = (value != null) ? value.toString() : "-";
+                            cell = new PdfPCell(new Phrase(text, cellFont));
                         } catch (Exception ex) {
                             cell = new PdfPCell(new Phrase("ERR", cellFont));
                         }
@@ -114,7 +108,7 @@ public class PdfReportBuilder {
                 }
             } else {
                 PdfPCell emptyCell = new PdfPCell(new Phrase("No records found", cellFont));
-                emptyCell.setColspan(headers.size());
+                emptyCell.setColspan(columns.size());
                 emptyCell.setHorizontalAlignment(Element.ALIGN_CENTER);
                 emptyCell.setPadding(10f);
                 table.addCell(emptyCell);
@@ -135,8 +129,7 @@ public class PdfReportBuilder {
             document.add(footer);
 
         } catch (Exception e) {
-            System.err.println("❌ PDF generation failed: " + e.getMessage());
-            e.printStackTrace();
+            log.error("PDF generation failed for '{}'", title, e);
             throw e;
         } finally {
             if (document != null && document.isOpen()) {
@@ -157,14 +150,5 @@ public class PdfReportBuilder {
             return fallback;
         }
         return Color.decode("#" + normalized);
-    }
-
-
-    private static Field[] getAllFields(Class<?> type) {
-        List<Field> fields = new ArrayList<>();
-        for (Class<?> c = type; c != null && c != Object.class; c = c.getSuperclass()) {
-            fields.addAll(List.of(c.getDeclaredFields()));
-        }
-        return fields.toArray(new Field[0]);
     }
 }

@@ -79,7 +79,7 @@ public class BillingServiceImpl implements BillingService {
         result.put("page", invoicePage.getNumber());
         result.put("size", invoicePage.getSize());
         result.put("totalItems", invoicePage.getTotalElements());
-        result.put("totalPages", invoicePage.getTotalPages());
+        result.put("totalPages", Math.max(invoicePage.getTotalPages(), 1));
         result.put("hasNext", invoicePage.hasNext());
         result.put("hasPrevious", invoicePage.hasPrevious());
         return result;
@@ -115,9 +115,9 @@ public class BillingServiceImpl implements BillingService {
         session.setPlan(requestedPlan);
         session.setProvider(PROVIDER_NAME);
         session.setReference(generateReference("CHK", tenant.getId()));
-        session.setAmount(amountForPlan(requestedPlan));
+        session.setAmount(checkoutAmountForPlan(requestedPlan));
         session.setCurrency(currencyForPlan(requestedPlan));
-        session.setCustomerEmail(blankToNull(customerEmail));
+        session.setCustomerEmail(resolvedEmail);
         session.setSuccessUrl(blankToNull(successUrl));
         session.setCancelUrl(blankToNull(cancelUrl));
         session.setStatus(BillingCheckoutStatus.PENDING);
@@ -136,15 +136,12 @@ public class BillingServiceImpl implements BillingService {
         payload.put("email", resolvedEmail);
         payload.put("reference", session.getReference());
         payload.put("currency", currencyForPlan(requestedPlan));
-        payload.put("callback_url", hasText(successUrl) ? successUrl.trim() : buildCheckoutUrl(successUrl, session.getReference(), requestedPlan));
+        payload.put("callback_url", buildCheckoutUrl(successUrl, session.getReference(), requestedPlan));
         payload.put("metadata", metadata);
 
-        String providerPlanCode = resolveProviderPlanCode(requestedPlan);
-        if (hasText(providerPlanCode)) {
-            payload.put("plan", providerPlanCode);
-        } else {
-            payload.put("amount", toKobo(amountForPlan(requestedPlan)));
-        }
+        // The checkout should reflect the temporary intro price. We only send the discounted
+        // amount here, then attach the recurring Paystack plan after a successful authorization.
+        payload.put("amount", toKobo(checkoutAmountForPlan(requestedPlan)));
 
         JsonNode providerData = paystackClient.initializeTransaction(payload);
 
@@ -230,6 +227,12 @@ public class BillingServiceImpl implements BillingService {
 
         BillingSubscription subscription = subscriptionRepository.findByTenant_Id(tenant.getId())
                 .orElseGet(() -> initializeSubscription(tenant));
+        if (hasText(subscription.getProviderSubscriptionCode()) && hasText(subscription.getProviderSubscriptionToken())) {
+            paystackClient.disableSubscription(
+                    subscription.getProviderSubscriptionCode(),
+                    subscription.getProviderSubscriptionToken()
+            );
+        }
         applyPlanState(subscription, TenantPlan.FREE);
         subscription.setUpdatedBy(actor);
         subscription = subscriptionRepository.save(subscription);
@@ -448,7 +451,11 @@ public class BillingServiceImpl implements BillingService {
 
     private BillingOverviewDto toOverviewDto(BillingSubscription subscription, Tenant tenant) {
         BillingOverviewDto dto = new BillingOverviewDto();
-        dto.setPlanId(Optional.ofNullable(tenant.getPlan()).orElse(TenantPlan.FREE).name());
+        dto.setPlanId(
+                Optional.ofNullable(subscription.getPlan())
+                        .orElse(Optional.ofNullable(tenant.getPlan()).orElse(TenantPlan.FREE))
+                        .name()
+        );
         dto.setStatus(Optional.ofNullable(subscription.getStatus()).orElse(BillingSubscriptionStatus.ACTIVE).name());
         dto.setAmount(subscription.getAmount());
         dto.setCurrency(subscription.getCurrency());
@@ -493,7 +500,9 @@ public class BillingServiceImpl implements BillingService {
         }
 
         BigDecimal paidAmount = amountFromKobo(paymentData.path("amount"));
-        BigDecimal expectedAmount = amountForPlan(resolvedPlan);
+        BigDecimal expectedAmount = Optional.ofNullable(session.getAmount())
+                .filter(amount -> amount.compareTo(BigDecimal.ZERO) > 0)
+                .orElseGet(() -> checkoutAmountForPlan(resolvedPlan));
         if (expectedAmount.compareTo(BigDecimal.ZERO) > 0 && paidAmount.compareTo(expectedAmount) < 0) {
             throw new IllegalArgumentException("Verified payment amount is lower than the selected plan amount.");
         }
@@ -545,6 +554,10 @@ public class BillingServiceImpl implements BillingService {
         subscription.setCancelAtPeriodEnd(false);
         subscription.setNextBillingDate(plan == TenantPlan.PRO ? LocalDate.now().plusDays(30) : null);
         subscription.setUpdatedBy(actor);
+        BigDecimal paidAmount = amountFromKobo(paymentData.path("amount"));
+        if (paidAmount.compareTo(BigDecimal.ZERO) > 0) {
+            subscription.setAmount(paidAmount);
+        }
 
         JsonNode customer = paymentData.path("customer");
         JsonNode authorization = paymentData.path("authorization");
@@ -758,6 +771,15 @@ public class BillingServiceImpl implements BillingService {
     private BigDecimal amountForPlan(TenantPlan plan) {
         return switch (plan) {
             case PRO -> BigDecimal.valueOf(10_000);
+            case FREE, ENTERPRISE -> BigDecimal.ZERO;
+        };
+    }
+
+    private BigDecimal checkoutAmountForPlan(TenantPlan plan) {
+        return switch (plan) {
+            // The first month is temporarily discounted, while renewals continue on the
+            // regular Paystack recurring plan configured for PRO.
+            case PRO -> BigDecimal.valueOf(7_000);
             case FREE, ENTERPRISE -> BigDecimal.ZERO;
         };
     }

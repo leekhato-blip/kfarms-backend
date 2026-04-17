@@ -4,19 +4,16 @@ import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 import java.io.ByteArrayOutputStream;
-import java.lang.reflect.Field;
-import java.util.ArrayList;
 import java.util.List;
 
 public class ExcelReportBuilder {
 
     /**
-     * Builds an Excel workbook from a list of entities and headers.
-     * Generic and reusable for any report type.
+     * Builds an Excel workbook from a list of rows and explicit column definitions.
      */
-    public static byte[] buildWorkbook(List<?> dataList, String sheetName, List<String> headers) {
-        if (headers == null || headers.isEmpty()) {
-            throw new IllegalArgumentException("Headers cannot be null or empty");
+    public static <T> byte[] buildWorkbook(List<T> dataList, String sheetName, List<ReportColumn<T>> columns) {
+        if (columns == null || columns.isEmpty()) {
+            throw new IllegalArgumentException("Columns cannot be null or empty");
         }
 
         try (Workbook workbook = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
@@ -24,11 +21,11 @@ public class ExcelReportBuilder {
             Sheet sheet = workbook.createSheet(sheetName);
             sheet.setDefaultColumnWidth(20);
 
-            // Header style (bold + purple accent 💜)
+            // Header style
             CellStyle headerStyle = workbook.createCellStyle();
             Font headerFont = workbook.createFont();
             headerFont.setBold(true);
-            headerFont.setColor(IndexedColors.VIOLET.getIndex()); // Purple touch
+            headerFont.setColor(IndexedColors.DARK_BLUE.getIndex());
             headerStyle.setFont(headerFont);
             headerStyle.setFillForegroundColor(IndexedColors.LIGHT_YELLOW.getIndex());
             headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
@@ -40,27 +37,26 @@ public class ExcelReportBuilder {
 
             // Create header row
             Row headerRow = sheet.createRow(0);
-            for (int i = 0; i < headers.size(); i++) {
-                sheet.autoSizeColumn(i);
+            for (int i = 0; i < columns.size(); i++) {
                 Cell cell = headerRow.createCell(i);
-                cell.setCellValue(headers.get(i));
+                cell.setCellValue(columns.get(i).header());
                 cell.setCellStyle(headerStyle);
-                sheet.autoSizeColumn(i);
             }
 
             // Populate data rows
             if (dataList != null && !dataList.isEmpty()) {
                 int rowIdx = 1;
-                for (Object obj : dataList) {
+                for (T obj : dataList) {
                     Row row = sheet.createRow(rowIdx++);
-                    Field[] fields = getAllFields(obj.getClass());
-
-                    for (int col = 0; col < fields.length && col < headers.size(); col++) {
-                        fields[col].setAccessible(true);
-                        Object value = fields[col].get(obj);
-                        row.createCell(col).setCellValue(value != null ? value.toString() : "");
+                    for (int col = 0; col < columns.size(); col++) {
+                        Cell cell = row.createCell(col);
+                        writeCellValue(cell, columns.get(col).valueFor(obj));
                     }
                 }
+            }
+
+            for (int col = 0; col < columns.size(); col++) {
+                sheet.autoSizeColumn(col);
             }
 
             workbook.write(out);
@@ -71,11 +67,22 @@ public class ExcelReportBuilder {
         }
     }
 
-    private static Field[] getAllFields(Class<?> type) {
-        List<Field> fields = new ArrayList<>();
-        for (Class<?> c = type; c != null && c != Object.class; c = c.getSuperclass()) {
-            fields.addAll(List.of(c.getDeclaredFields()));
+    private static void writeCellValue(Cell cell, Object value) {
+        if (value == null) {
+            cell.setCellValue("");
+            return;
         }
-        return fields.toArray(new Field[0]);
+
+        if (value instanceof Number number) {
+            cell.setCellValue(number.doubleValue());
+            return;
+        }
+
+        if (value instanceof Boolean bool) {
+            cell.setCellValue(bool);
+            return;
+        }
+
+        cell.setCellValue(String.valueOf(value));
     }
 }

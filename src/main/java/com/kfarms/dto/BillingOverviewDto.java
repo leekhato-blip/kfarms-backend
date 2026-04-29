@@ -19,5 +19,6 @@ public class BillingOverviewDto {
     private String subscriptionReference;
     private String paymentMethodBrand;
     private String paymentMethodLast4;
+    private Boolean paymentSettingsAvailable;
     private LocalDateTime updatedAt;
 }

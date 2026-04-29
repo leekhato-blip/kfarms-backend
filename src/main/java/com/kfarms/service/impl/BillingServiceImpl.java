@@ -246,15 +246,19 @@ public class BillingServiceImpl implements BillingService {
     public Map<String, Object> createPortalSession(String returnUrl) {
         Tenant tenant = requireTenant();
         BillingSubscription subscription = prepareBillingState(tenant);
+        boolean paymentSettingsAvailable = hasText(subscription.getProviderSubscriptionCode());
+        Map<String, Object> result = new LinkedHashMap<>();
 
-        if (!hasText(subscription.getProviderSubscriptionCode())) {
-            throw new IllegalArgumentException(
-                    "Payment settings will be available after the first recurring Paystack subscription is connected."
-            );
+        if (!paymentSettingsAvailable) {
+            result.put("portalUrl", "");
+            result.put("available", false);
+            result.put("paymentSettingsAvailable", false);
+            return result;
         }
 
-        Map<String, Object> result = new LinkedHashMap<>();
         result.put("portalUrl", paystackClient.createSubscriptionManageLink(subscription.getProviderSubscriptionCode()));
+        result.put("available", true);
+        result.put("paymentSettingsAvailable", true);
         return result;
     }
 
@@ -466,6 +470,7 @@ public class BillingServiceImpl implements BillingService {
         dto.setSubscriptionReference(subscription.getSubscriptionReference());
         dto.setPaymentMethodBrand(subscription.getPaymentMethodBrand());
         dto.setPaymentMethodLast4(subscription.getPaymentMethodLast4());
+        dto.setPaymentSettingsAvailable(hasText(subscription.getProviderSubscriptionCode()));
         dto.setUpdatedAt(
                 subscription.getUpdatedAt() != null
                         ? subscription.getUpdatedAt()

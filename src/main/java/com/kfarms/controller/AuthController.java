@@ -20,16 +20,21 @@ import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Duration;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
+    private static final BCryptPasswordEncoder FALLBACK_PASSWORD_ENCODER = new BCryptPasswordEncoder();
+
     private final JwtService jwtService;
     private final AppUserRepository userRepo;
     private final PasswordEncoder passwordEncoder;
@@ -79,44 +84,16 @@ public class AuthController {
                             loginRequest.getPassword()
                     )
             );
- 
-            SecurityContextHolder.getContext().setAuthentication(auth);
-            String principal = auth.getName();
 
-            AppUser user = findByEmailOrUsername(principal);
-
-            String formattedUsername = StringUtils.capitalize(user.getUsername().toLowerCase());
-            UserDto userDto = new UserDto(
-                    user.getId(),
-                    formattedUsername,
-                    user.getEmail(),
-                    user.getRole().name()
-            );
-            String jwt = jwtService.generateToken(principal);
-
-            boolean isProd = false;
-            ResponseCookie cookie = ResponseCookie.from(JwtCookie.ACCESS_COOKIE, jwt)
-                    .httpOnly(true)
-                    .secure(isProd)
-                    .path(JwtCookie.PATH)
-                    .maxAge(Duration.ofDays(1))
-                    .sameSite("Lax")
-                    .build();
-            response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
-
-            LoginResponse loginResponse = new LoginResponse(jwt, userDto);
-
-            return ResponseEntity.ok(
-                    new ApiResponse<>(
-                            true,
-                            "Login Successful",
-                            loginResponse
-                    )
-            );
+            return buildLoginResponse(auth, response);
         } catch (DisabledException e) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(new ApiResponse<>(false, "This account is disabled", null));
         } catch (AuthenticationException e){
+            Authentication fallbackAuth = authenticateAgainstStoredHash(loginRequest);
+            if (fallbackAuth != null) {
+                return buildLoginResponse(fallbackAuth, response);
+            }
             return ResponseEntity.status(401)
                     .body(new ApiResponse<>(false, "Invalid credentials", null));
         }
@@ -165,5 +142,89 @@ public class AuthController {
         return userRepo.findByEmail(principal)
                 .or(() -> userRepo.findByUsername(principal))
                 .orElseThrow(() -> new RuntimeException("User not found"));
+    }
+
+    private ResponseEntity<ApiResponse<LoginResponse>> buildLoginResponse(
+            Authentication auth,
+            HttpServletResponse response
+    ) {
+        SecurityContextHolder.getContext().setAuthentication(auth);
+        String principal = auth.getName();
+
+        AppUser user = findByEmailOrUsername(principal);
+        UserDto userDto = toUserDto(user);
+        String jwt = jwtService.generateToken(principal);
+
+        boolean isProd = false;
+        ResponseCookie cookie = ResponseCookie.from(JwtCookie.ACCESS_COOKIE, jwt)
+                .httpOnly(true)
+                .secure(isProd)
+                .path(JwtCookie.PATH)
+                .maxAge(Duration.ofDays(1))
+                .sameSite("Lax")
+                .build();
+        response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+
+        LoginResponse loginResponse = new LoginResponse(jwt, userDto);
+
+        return ResponseEntity.ok(
+                new ApiResponse<>(
+                        true,
+                        "Login Successful",
+                        loginResponse
+                )
+        );
+    }
+
+    private UserDto toUserDto(AppUser user) {
+        String formattedUsername = StringUtils.capitalize(user.getUsername().toLowerCase());
+        return new UserDto(
+                user.getId(),
+                formattedUsername,
+                user.getEmail(),
+                user.getRole().name()
+        );
+    }
+
+    private Authentication authenticateAgainstStoredHash(LoginRequest loginRequest) {
+        String identifier = String.valueOf(loginRequest.getEmailOrUsername()).trim();
+        if (!StringUtils.hasText(identifier)) {
+            return null;
+        }
+
+        AppUser user = userRepo.findByEmail(identifier)
+                .or(() -> userRepo.findByUsername(identifier))
+                .orElse(null);
+
+        if (user == null || !user.isEnabled()) {
+            return null;
+        }
+
+        String storedPassword = normalizeStoredPassword(user.getPassword());
+        if (!StringUtils.hasText(storedPassword)) {
+            return null;
+        }
+
+        if (!FALLBACK_PASSWORD_ENCODER.matches(loginRequest.getPassword(), storedPassword)) {
+            return null;
+        }
+
+        return new UsernamePasswordAuthenticationToken(
+                user.getEmail(),
+                null,
+                List.of(
+                        new SimpleGrantedAuthority("ROLE_USER"),
+                        new SimpleGrantedAuthority("ROLE_" + user.getRole().name())
+                )
+        );
+    }
+
+    private String normalizeStoredPassword(String storedPassword) {
+        String normalized = String.valueOf(storedPassword).trim();
+        String bcryptPrefix = "{bcrypt}";
+        if (normalized.regionMatches(true, 0, bcryptPrefix, 0, bcryptPrefix.length())) {
+            normalized = normalized.substring(bcryptPrefix.length()).trim();
+        }
+        return normalized;
     }
 }

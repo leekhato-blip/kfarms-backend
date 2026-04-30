@@ -23,7 +23,7 @@ public final class CsvReportBuilder {
                 appendRow(
                         sb,
                         columns.stream()
-                                .map(column -> column.valueFor(item))
+                                .map(column -> column.formattedValueFor(item))
                                 .toArray()
                 );
             }

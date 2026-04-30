@@ -4,6 +4,9 @@ import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 import java.io.ByteArrayOutputStream;
+import java.sql.Timestamp;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 public class ExcelReportBuilder {
@@ -34,6 +37,14 @@ public class ExcelReportBuilder {
             headerStyle.setBorderLeft(BorderStyle.THIN);
             headerStyle.setBorderRight(BorderStyle.THIN);
 
+            DataFormat dataFormat = workbook.createDataFormat();
+
+            CellStyle dateStyle = workbook.createCellStyle();
+            dateStyle.setDataFormat(dataFormat.getFormat("dd mmm yyyy"));
+
+            CellStyle moneyStyle = workbook.createCellStyle();
+            moneyStyle.setDataFormat(dataFormat.getFormat("#,##0.00"));
+
 
             // Create header row
             Row headerRow = sheet.createRow(0);
@@ -50,7 +61,14 @@ public class ExcelReportBuilder {
                     Row row = sheet.createRow(rowIdx++);
                     for (int col = 0; col < columns.size(); col++) {
                         Cell cell = row.createCell(col);
-                        writeCellValue(cell, columns.get(col).valueFor(obj));
+                        ReportColumn<T> column = columns.get(col);
+                        writeCellValue(
+                                cell,
+                                column.valueFor(obj),
+                                column.valueType(),
+                                dateStyle,
+                                moneyStyle
+                        );
                     }
                 }
             }
@@ -67,9 +85,38 @@ public class ExcelReportBuilder {
         }
     }
 
-    private static void writeCellValue(Cell cell, Object value) {
+    private static void writeCellValue(
+            Cell cell,
+            Object value,
+            ReportValueType valueType,
+            CellStyle dateStyle,
+            CellStyle moneyStyle
+    ) {
         if (value == null) {
             cell.setCellValue("");
+            return;
+        }
+
+        if (valueType == ReportValueType.DATE) {
+            if (value instanceof LocalDate localDate) {
+                cell.setCellValue(java.sql.Date.valueOf(localDate));
+                cell.setCellStyle(dateStyle);
+                return;
+            }
+
+            if (value instanceof LocalDateTime localDateTime) {
+                cell.setCellValue(Timestamp.valueOf(localDateTime));
+                cell.setCellStyle(dateStyle);
+                return;
+            }
+
+            cell.setCellValue(ReportValueFormatter.format(value, valueType));
+            return;
+        }
+
+        if (valueType == ReportValueType.MONEY && value instanceof Number number) {
+            cell.setCellValue(number.doubleValue());
+            cell.setCellStyle(moneyStyle);
             return;
         }
 

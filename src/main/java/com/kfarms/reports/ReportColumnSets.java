@@ -14,27 +14,27 @@ import java.util.List;
 public final class ReportColumnSets {
 
     public static final List<ReportColumn<Sales>> SALES = List.of(
-            ReportColumn.of("Date", Sales::getSalesDate),
+            ReportColumn.of("Date", Sales::getSalesDate, ReportValueType.DATE),
             ReportColumn.of("Item", Sales::getItemName),
             ReportColumn.of("Category", sale -> text(sale.getCategory())),
             ReportColumn.of("Quantity", Sales::getQuantity),
-            ReportColumn.of("Unit Price", Sales::getUnitPrice),
-            ReportColumn.of("Total Price", Sales::getTotalPrice),
+            ReportColumn.of("Unit Price", Sales::getUnitPrice, ReportValueType.MONEY),
+            ReportColumn.of("Total Price", Sales::getTotalPrice, ReportValueType.MONEY),
             ReportColumn.of("Buyer", Sales::getBuyer),
             ReportColumn.of("Note", Sales::getNote)
     );
 
     public static final List<ReportColumn<Feed>> FEEDS = List.of(
-            ReportColumn.of("Date", Feed::getDate),
+            ReportColumn.of("Date", Feed::getDate, ReportValueType.DATE),
             ReportColumn.of("Batch Type", feed -> text(feed.getBatchType())),
             ReportColumn.of("Feed Name", Feed::getFeedName),
             ReportColumn.of("Quantity Used", Feed::getQuantityUsed),
-            ReportColumn.of("Unit Cost", Feed::getUnitCost),
+            ReportColumn.of("Unit Cost", Feed::getUnitCost, ReportValueType.MONEY),
             ReportColumn.of("Note", Feed::getNote)
     );
 
     public static final List<ReportColumn<EggProduction>> EGGS = List.of(
-            ReportColumn.of("Date", EggProduction::getCollectionDate),
+            ReportColumn.of("Date", EggProduction::getCollectionDate, ReportValueType.DATE),
             ReportColumn.of("Batch", egg -> egg.getLivestock() != null ? egg.getLivestock().getBatchName() : ""),
             ReportColumn.of("Good Eggs", EggProduction::getGoodEggs),
             ReportColumn.of("Cracked Eggs", EggProduction::getDamagedEggs),
@@ -43,12 +43,12 @@ public final class ReportColumnSets {
     );
 
     public static final List<ReportColumn<Supplies>> SUPPLIES = List.of(
-            ReportColumn.of("Date", Supplies::getSupplyDate),
+            ReportColumn.of("Date", Supplies::getSupplyDate, ReportValueType.DATE),
             ReportColumn.of("Item", Supplies::getItemName),
             ReportColumn.of("Category", item -> text(item.getCategory())),
             ReportColumn.of("Quantity", Supplies::getQuantity),
-            ReportColumn.of("Unit Price", Supplies::getUnitPrice),
-            ReportColumn.of("Total Price", Supplies::getTotalPrice),
+            ReportColumn.of("Unit Price", Supplies::getUnitPrice, ReportValueType.MONEY),
+            ReportColumn.of("Total Price", Supplies::getTotalPrice, ReportValueType.MONEY),
             ReportColumn.of("Supplier", Supplies::getSupplierName),
             ReportColumn.of("Note", Supplies::getNote)
     );
@@ -57,8 +57,9 @@ public final class ReportColumnSets {
             ReportColumn.of("Item", Inventory::getItemName),
             ReportColumn.of("Category", item -> text(item.getCategory())),
             ReportColumn.of("Quantity", Inventory::getQuantity),
+            ReportColumn.of("Unit Cost", Inventory::getUnitCost, ReportValueType.MONEY),
             ReportColumn.of("Unit", item -> text(item.getUnit())),
-            ReportColumn.of("Updated", Inventory::getLastUpdated),
+            ReportColumn.of("Updated", Inventory::getLastUpdated, ReportValueType.DATE),
             ReportColumn.of("Note", Inventory::getNote)
     );
 
@@ -66,7 +67,7 @@ public final class ReportColumnSets {
             ReportColumn.of("Flock", Livestock::getBatchName),
             ReportColumn.of("Type", item -> text(item.getType())),
             ReportColumn.of("Alive", Livestock::getCurrentStock),
-            ReportColumn.of("Start Date", Livestock::getArrivalDate),
+            ReportColumn.of("Start Date", Livestock::getArrivalDate, ReportValueType.DATE),
             ReportColumn.of("Source", item -> text(item.getSourceType())),
             ReportColumn.of("Starting Age (Weeks)", Livestock::getStartingAgeInWeeks),
             ReportColumn.of("Mortality", Livestock::getMortality)
@@ -81,14 +82,14 @@ public final class ReportColumnSets {
             ReportColumn.of("Feeding Schedule", FishPond::getFeedingSchedule),
             ReportColumn.of("Status", item -> text(item.getStatus())),
             ReportColumn.of("Location", FishPond::getPondLocation),
-            ReportColumn.of("Date Stocked", FishPond::getDateStocked),
-            ReportColumn.of("Last Water Change", FishPond::getLastWaterChange),
-            ReportColumn.of("Next Water Change", FishPond::getNextWaterChange),
+            ReportColumn.of("Date Stocked", FishPond::getDateStocked, ReportValueType.DATE),
+            ReportColumn.of("Last Water Change", FishPond::getLastWaterChange, ReportValueType.DATE),
+            ReportColumn.of("Next Water Change", FishPond::getNextWaterChange, ReportValueType.DATE),
             ReportColumn.of("Note", FishPond::getNote)
     );
 
     public static final List<ReportColumn<FishHatch>> FISH_HATCHES = List.of(
-            ReportColumn.of("Hatch Date", FishHatch::getHatchDate),
+            ReportColumn.of("Hatch Date", FishHatch::getHatchDate, ReportValueType.DATE),
             ReportColumn.of("Pond", hatch -> hatch.getPond() != null ? hatch.getPond().getPondName() : ""),
             ReportColumn.of("Quantity Hatched", FishHatch::getQuantityHatched),
             ReportColumn.of("Hatch Rate", FishHatch::getHatchRate),

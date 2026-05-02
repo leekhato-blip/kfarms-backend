@@ -42,6 +42,9 @@ public class PaystackClient {
     @Value("${kfarms.billing.paystack.pro-monthly-plan-code:}")
     private String proMonthlyPlanCode;
 
+    @Value("${kfarms.billing.paystack.pro-annual-plan-code:}")
+    private String proAnnualPlanCode;
+
     public String providerName() {
         return PROVIDER;
     }
@@ -52,6 +55,10 @@ public class PaystackClient {
 
     public String getProMonthlyPlanCode() {
         return StringUtils.hasText(proMonthlyPlanCode) ? proMonthlyPlanCode.trim() : "";
+    }
+
+    public String getProAnnualPlanCode() {
+        return StringUtils.hasText(proAnnualPlanCode) ? proAnnualPlanCode.trim() : "";
     }
 
     public JsonNode initializeTransaction(Map<String, Object> payload) {

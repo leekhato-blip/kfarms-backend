@@ -3,6 +3,7 @@ package com.kfarms.service;
 
 import com.kfarms.dto.LivestockRequestDto;
 import com.kfarms.dto.LivestockResponseDto;
+import com.kfarms.dto.MortalityRecordRequestDto;
 import com.kfarms.dto.StockAdjustmentRequestDto;
 
 import java.time.LocalDate;
@@ -23,4 +24,5 @@ public interface LivestockService {
     Map<String, Object> getOverview(int rangeDays);
 
     LivestockResponseDto adjustStock(Long id, StockAdjustmentRequestDto request, String updatedBy);
+    LivestockResponseDto recordMortality(Long id, MortalityRecordRequestDto request, String updatedBy);
 }

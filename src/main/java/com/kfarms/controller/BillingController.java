@@ -57,6 +57,7 @@ public class BillingController {
                         "Checkout session created successfully",
                         billingService.createCheckoutSession(
                                 request.getPlanId(),
+                                request.getBillingInterval(),
                                 request.getSuccessUrl(),
                                 request.getCancelUrl(),
                                 request.getCustomerEmail(),
@@ -77,7 +78,12 @@ public class BillingController {
                 new ApiResponse<>(
                         true,
                         "Checkout verified successfully",
-                        billingService.verifyCheckoutSession(request.getReference(), request.getPlanId(), actor)
+                        billingService.verifyCheckoutSession(
+                                request.getReference(),
+                                request.getPlanId(),
+                                request.getBillingInterval(),
+                                actor
+                        )
                 )
         );
     }

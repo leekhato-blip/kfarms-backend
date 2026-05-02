@@ -14,6 +14,7 @@ import com.kfarms.service.SuppliesService;
 import com.kfarms.tenant.entity.Tenant;
 import com.kfarms.tenant.repository.TenantRepository;
 import com.kfarms.tenant.service.TenantContext;
+import com.kfarms.tenant.service.TenantRecordAuditService;
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -38,6 +39,7 @@ public class SuppliesServiceImpl implements SuppliesService {
     private final InventoryService inventoryService;
     private final NotificationService notification;
     private final TenantRepository tenantRepository;
+    private final TenantRecordAuditService tenantRecordAuditService;
 
 
     // CREATE - add new supply item
@@ -47,6 +49,15 @@ public class SuppliesServiceImpl implements SuppliesService {
         Supplies entity = SuppliesMapper.toEntity(dto);
         entity.setTenant(resolveTenant(tenantId));
         Supplies saved = repo.save(entity);
+        tenantRecordAuditService.created(
+                tenantId,
+                entity.getCreatedBy(),
+                "SUPPLIES",
+                saved.getId(),
+                suppliesTargetName(saved),
+                suppliesSummary(saved),
+                "Created supply record for " + suppliesTargetName(saved) + "."
+        );
 
         // auto update inventory if not livestock
 
@@ -137,6 +148,7 @@ public class SuppliesServiceImpl implements SuppliesService {
         Supplies entity = repo.findByIdAndTenant_Id(id, tenantId)
                 .filter(s -> !Boolean.TRUE.equals(s.getDeleted()))
                 .orElseThrow(() -> new ResourceNotFoundException("Supplies", "id", id));
+        String previousSummary = suppliesSummary(entity);
 
         entity.setItemName(request.getItemName());
         entity.setSupplierName(request.getSupplierName());
@@ -151,6 +163,16 @@ public class SuppliesServiceImpl implements SuppliesService {
         entity.setUpdatedBy(updatedBy);
 
         repo.save(entity);
+        tenantRecordAuditService.updated(
+                tenantId,
+                updatedBy,
+                "SUPPLIES",
+                entity.getId(),
+                suppliesTargetName(entity),
+                previousSummary,
+                suppliesSummary(entity),
+                "Updated supply record for " + suppliesTargetName(entity) + "."
+        );
         return SuppliesMapper.toResponseDto(entity);
     }
 
@@ -160,6 +182,7 @@ public class SuppliesServiceImpl implements SuppliesService {
         Long tenantId = requireTenantId();
         Supplies entity = repo.findByIdAndTenant_Id(id, tenantId)
                 .orElseThrow(() -> new ResourceNotFoundException("Supplies", "id", id));
+        String previousSummary = suppliesSummary(entity);
 
         if (Boolean.TRUE.equals(entity.getDeleted())) {
             throw new IllegalArgumentException("Supply record with ID " + id + " has already been deleted");
@@ -169,6 +192,15 @@ public class SuppliesServiceImpl implements SuppliesService {
         entity.setDeletedAt(LocalDateTime.now());
         entity.setUpdatedBy(deletedBy);
         repo.save(entity);
+        tenantRecordAuditService.deleted(
+                tenantId,
+                deletedBy,
+                "SUPPLIES",
+                entity.getId(),
+                suppliesTargetName(entity),
+                previousSummary,
+                "Deleted supply record for " + suppliesTargetName(entity) + "."
+        );
     }
 
     // DELETE (permanently)
@@ -331,5 +363,27 @@ public class SuppliesServiceImpl implements SuppliesService {
     private Tenant resolveTenant(Long tenantId) {
         return tenantRepository.findById(tenantId)
                 .orElseThrow(() -> new ResourceNotFoundException("Tenant", "id", tenantId));
+    }
+
+    private String suppliesTargetName(Supplies supplies) {
+        String itemName = supplies != null ? supplies.getItemName() : null;
+        return itemName != null && !itemName.isBlank() ? itemName.trim() : "Supply record";
+    }
+
+    private String suppliesSummary(Supplies supplies) {
+        if (supplies == null) {
+            return "";
+        }
+        return String.format(
+                "Qty %s • Unit %s • Total %s • Date %s",
+                Optional.ofNullable(supplies.getQuantity()).orElse(0),
+                formatAmount(supplies.getUnitPrice()),
+                formatAmount(supplies.getTotalPrice()),
+                Optional.ofNullable(supplies.getSupplyDate()).map(LocalDate::toString).orElse("N/A")
+        );
+    }
+
+    private String formatAmount(BigDecimal amount) {
+        return amount != null ? amount.toPlainString() : "0";
     }
 }

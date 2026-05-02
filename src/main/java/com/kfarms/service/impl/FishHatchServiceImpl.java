@@ -12,6 +12,7 @@ import com.kfarms.repository.FishPondRepository;
 import com.kfarms.service.FishHatchService;
 import com.kfarms.service.NotificationService;
 import com.kfarms.tenant.service.TenantContext;
+import com.kfarms.tenant.service.TenantRecordAuditService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,16 +33,27 @@ public class FishHatchServiceImpl implements FishHatchService {
     private final FishHatchRepository hatchRepo;
     private final FishPondRepository pondRepo;
     private final NotificationService notification;
+    private final TenantRecordAuditService tenantRecordAuditService;
 
 
     // CREATE
     @Override
     public FishHatchResponseDto create(FishHatchRequestDto request){
         FishPond pond = getTenantPond(request.getPondId());
+        Long tenantId = requireTenantId();
 
         FishHatch entity = FishHatchMapper.toEntity(request, pond);
         entity.setTenant(pond.getTenant());
         FishHatch saved = hatchRepo.save(entity);
+        tenantRecordAuditService.created(
+                tenantId,
+                entity.getCreatedBy(),
+                "FISH_HATCH",
+                saved.getId(),
+                fishHatchTargetName(saved),
+                fishHatchSummary(saved),
+                "Created fish hatch record for " + fishHatchTargetName(saved) + "."
+        );
         return FishHatchMapper.toResponseDto(saved);
     }
 
@@ -71,6 +83,7 @@ public class FishHatchServiceImpl implements FishHatchService {
 
         FishHatch entity = getTenantHatch(id, false);
         FishPond pond = getTenantPond(request.getPondId());
+        String previousSummary = fishHatchSummary(entity);
 
         // --- core fields ---
         entity.setPond(pond);
@@ -97,6 +110,16 @@ public class FishHatchServiceImpl implements FishHatchService {
         entity.setHatchRate(hatchRatePercent);
 
         hatchRepo.save(entity);
+        tenantRecordAuditService.updated(
+                requireTenantId(),
+                updatedBy,
+                "FISH_HATCH",
+                entity.getId(),
+                fishHatchTargetName(entity),
+                previousSummary,
+                fishHatchSummary(entity),
+                "Updated fish hatch record for " + fishHatchTargetName(entity) + "."
+        );
 
         return FishHatchMapper.toResponseDto(entity);
     }
@@ -106,6 +129,7 @@ public class FishHatchServiceImpl implements FishHatchService {
     @Transactional
     public void delete(Long id, String deletedBy){
         FishHatch entity = getTenantHatch(id, true);
+        String previousSummary = fishHatchSummary(entity);
 
         if (Boolean.TRUE.equals(entity.getDeleted())) {
             throw new IllegalArgumentException("Fish hatch record with ID " + id + " has already been deleted");
@@ -115,6 +139,15 @@ public class FishHatchServiceImpl implements FishHatchService {
         entity.setDeletedAt(LocalDateTime.now());
         entity.setUpdatedBy(deletedBy);
         hatchRepo.save(entity);
+        tenantRecordAuditService.deleted(
+                requireTenantId(),
+                deletedBy,
+                "FISH_HATCH",
+                entity.getId(),
+                fishHatchTargetName(entity),
+                previousSummary,
+                "Deleted fish hatch record for " + fishHatchTargetName(entity) + "."
+        );
     }
 
     @Override
@@ -242,5 +275,26 @@ public class FishHatchServiceImpl implements FishHatchService {
             throw new ResourceNotFoundException("FishHatch", "id", id);
         }
         return hatch;
+    }
+
+    private String fishHatchTargetName(FishHatch hatch) {
+        if (hatch == null || hatch.getPond() == null) {
+            return "Fish hatch record";
+        }
+        String pondName = hatch.getPond().getPondName();
+        return pondName != null && !pondName.isBlank() ? pondName.trim() : "Fish hatch record";
+    }
+
+    private String fishHatchSummary(FishHatch hatch) {
+        if (hatch == null) {
+            return "";
+        }
+        return String.format(
+                "Hatched %s • Male %s • Female %s • Date %s",
+                hatch.getQuantityHatched(),
+                hatch.getMaleCount(),
+                hatch.getFemaleCount(),
+                hatch.getHatchDate() != null ? hatch.getHatchDate().toString() : "N/A"
+        );
     }
 }

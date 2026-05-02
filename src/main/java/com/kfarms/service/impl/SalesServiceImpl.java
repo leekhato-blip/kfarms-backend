@@ -14,6 +14,7 @@ import com.kfarms.service.SalesService;
 import com.kfarms.tenant.entity.Tenant;
 import com.kfarms.tenant.repository.TenantRepository;
 import com.kfarms.tenant.service.TenantContext;
+import com.kfarms.tenant.service.TenantRecordAuditService;
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -37,6 +38,7 @@ public class SalesServiceImpl implements SalesService {
     private final InventoryService inventoryService;
     private final NotificationService notification;
     private final TenantRepository tenantRepository;
+    private final TenantRecordAuditService tenantRecordAuditService;
 
 
     // CREATE - add a new sale item
@@ -46,6 +48,15 @@ public class SalesServiceImpl implements SalesService {
         Sales entity = SalesMapper.toEntity(dto);
         entity.setTenant(resolveTenant(tenantId));
         Sales saved = salesRepo.save(entity);
+        tenantRecordAuditService.created(
+                tenantId,
+                entity.getCreatedBy(),
+                "SALES",
+                saved.getId(),
+                salesTargetName(saved),
+                salesSummary(saved),
+                "Created sales record for " + salesTargetName(saved) + "."
+        );
         return SalesMapper.toResponseDto(saved);
     }
 
@@ -118,6 +129,7 @@ public class SalesServiceImpl implements SalesService {
         Sales entity = salesRepo.findByIdAndTenant_Id(id, tenantId)
                 .filter(s -> !Boolean.TRUE.equals(s.getDeleted()))
                 .orElseThrow(() -> new ResourceNotFoundException("Sales", "id", id));
+        String previousSummary = salesSummary(entity);
 
         entity.setItemName(request.getItemName());
         entity.setCategory(SalesCategory.valueOf(request.getCategory().toUpperCase()));
@@ -130,6 +142,16 @@ public class SalesServiceImpl implements SalesService {
         entity.setUpdatedBy(updatedBy);
 
         salesRepo.save(entity);
+        tenantRecordAuditService.updated(
+                tenantId,
+                updatedBy,
+                "SALES",
+                entity.getId(),
+                salesTargetName(entity),
+                previousSummary,
+                salesSummary(entity),
+                "Updated sales record for " + salesTargetName(entity) + "."
+        );
         return SalesMapper.toResponseDto(entity);
     }
 
@@ -139,6 +161,7 @@ public class SalesServiceImpl implements SalesService {
         Long tenantId = requireTenantId();
         Sales entity = salesRepo.findByIdAndTenant_Id(id, tenantId)
                 .orElseThrow(() -> new ResourceNotFoundException("Sales", "id", id));
+        String previousSummary = salesSummary(entity);
 
         if (Boolean.TRUE.equals(entity.getDeleted())) {
             throw new IllegalArgumentException("Sales record with ID " + id + " has already been deleted");
@@ -148,6 +171,15 @@ public class SalesServiceImpl implements SalesService {
         entity.setDeletedAt(LocalDateTime.now());
         entity.setUpdatedBy(deletedBy);
         salesRepo.save(entity);
+        tenantRecordAuditService.deleted(
+                tenantId,
+                deletedBy,
+                "SALES",
+                entity.getId(),
+                salesTargetName(entity),
+                previousSummary,
+                "Deleted sales record for " + salesTargetName(entity) + "."
+        );
     }
 
     // DELETE (permanent)
@@ -315,5 +347,27 @@ public class SalesServiceImpl implements SalesService {
     private Tenant resolveTenant(Long tenantId) {
         return tenantRepository.findById(tenantId)
                 .orElseThrow(() -> new ResourceNotFoundException("Tenant", "id", tenantId));
+    }
+
+    private String salesTargetName(Sales sales) {
+        String itemName = sales != null ? sales.getItemName() : null;
+        return itemName != null && !itemName.isBlank() ? itemName.trim() : "Sales record";
+    }
+
+    private String salesSummary(Sales sales) {
+        if (sales == null) {
+            return "";
+        }
+        return String.format(
+                "Qty %s • Unit %s • Total %s • Date %s",
+                Optional.ofNullable(sales.getQuantity()).orElse(0),
+                formatAmount(sales.getUnitPrice()),
+                formatAmount(sales.getTotalPrice()),
+                Optional.ofNullable(sales.getSalesDate()).map(LocalDate::toString).orElse("N/A")
+        );
+    }
+
+    private String formatAmount(BigDecimal amount) {
+        return amount != null ? amount.toPlainString() : "0";
     }
 }

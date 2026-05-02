@@ -10,6 +10,8 @@ public class BillingCheckoutRequestDto {
     @NotBlank(message = "Plan ID is required")
     private String planId;
 
+    private String billingInterval;
+
     private String successUrl;
 
     private String cancelUrl;

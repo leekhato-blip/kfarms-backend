@@ -21,6 +21,9 @@ public class LivestockResponseDto {
     private int ageInWeeks; // derived, not stored
     private Integer mortality;
     private PoultryKeepingMethod keepingMethod;
+    private Integer mortalityThisWeek;
+    private Integer mortalityThisMonth;
+    private LocalDate lastMortalityDate;
 
     private String note;
 

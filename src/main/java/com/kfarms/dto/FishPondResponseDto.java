@@ -16,6 +16,9 @@ public class FishPondResponseDto {
     private Integer currentStock;
     private Integer capacity;
     private Integer mortalityCount;
+    private Integer mortalityThisWeek;
+    private Integer mortalityThisMonth;
+    private LocalDate lastMortalityDate;
     // GROWTH/FEEDING
     private String feedingSchedule;
     // STATUS

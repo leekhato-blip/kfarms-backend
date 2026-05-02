@@ -45,6 +45,9 @@ public class BillingServiceImpl implements BillingService {
 
     private static final String PROVIDER_NAME = "PAYSTACK";
     private static final String FREE_PROVIDER = "NONE";
+    private static final String MONTHLY_INTERVAL = "MONTHLY";
+    private static final String ANNUAL_INTERVAL = "ANNUAL";
+    private static final String CONTRACT_INTERVAL = "CONTRACT";
     private static final DateTimeFormatter RECEIPT_DATE_FORMAT =
             DateTimeFormatter.ofPattern("dd MMM uuuu HH:mm", Locale.ENGLISH);
 
@@ -88,6 +91,7 @@ public class BillingServiceImpl implements BillingService {
     @Override
     public Map<String, Object> createCheckoutSession(
             String planId,
+            String billingInterval,
             String successUrl,
             String cancelUrl,
             String customerEmail,
@@ -95,6 +99,7 @@ public class BillingServiceImpl implements BillingService {
     ) {
         Tenant tenant = requireTenant();
         TenantPlan requestedPlan = parseCheckoutPlan(planId);
+        String resolvedInterval = resolveIntervalForPlan(requestedPlan, billingInterval);
         BillingSubscription subscription = prepareBillingState(tenant);
         String resolvedEmail = hasText(customerEmail)
                 ? customerEmail.trim()
@@ -106,6 +111,7 @@ public class BillingServiceImpl implements BillingService {
 
         if (tenant.getPlan() == requestedPlan
                 && subscription.getStatus() == BillingSubscriptionStatus.ACTIVE
+                && resolvedInterval.equals(resolveIntervalForPlan(requestedPlan, subscription.getBillingInterval()))
                 && !Boolean.TRUE.equals(subscription.getCancelAtPeriodEnd())) {
             throw new IllegalArgumentException("This plan is already active for your workspace.");
         }
@@ -115,8 +121,9 @@ public class BillingServiceImpl implements BillingService {
         session.setPlan(requestedPlan);
         session.setProvider(PROVIDER_NAME);
         session.setReference(generateReference("CHK", tenant.getId()));
-        session.setAmount(checkoutAmountForPlan(requestedPlan));
+        session.setAmount(checkoutAmountForPlan(requestedPlan, resolvedInterval));
         session.setCurrency(currencyForPlan(requestedPlan));
+        session.setBillingInterval(resolvedInterval);
         session.setCustomerEmail(resolvedEmail);
         session.setSuccessUrl(blankToNull(successUrl));
         session.setCancelUrl(blankToNull(cancelUrl));
@@ -130,18 +137,16 @@ public class BillingServiceImpl implements BillingService {
         metadata.put("tenantId", tenant.getId());
         metadata.put("tenantSlug", tenant.getSlug());
         metadata.put("planId", requestedPlan.name());
+        metadata.put("billingInterval", resolvedInterval);
         metadata.put("actor", actor);
 
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("email", resolvedEmail);
         payload.put("reference", session.getReference());
         payload.put("currency", currencyForPlan(requestedPlan));
-        payload.put("callback_url", buildCheckoutUrl(successUrl, session.getReference(), requestedPlan));
+        payload.put("callback_url", buildCheckoutUrl(successUrl, session.getReference(), requestedPlan, resolvedInterval));
         payload.put("metadata", metadata);
-
-        // The checkout should reflect the temporary intro price. We only send the discounted
-        // amount here, then attach the recurring Paystack plan after a successful authorization.
-        payload.put("amount", toKobo(checkoutAmountForPlan(requestedPlan)));
+        payload.put("amount", toKobo(checkoutAmountForPlan(requestedPlan, resolvedInterval)));
 
         JsonNode providerData = paystackClient.initializeTransaction(payload);
 
@@ -151,15 +156,18 @@ public class BillingServiceImpl implements BillingService {
         result.put("provider", PROVIDER_NAME);
         result.put("amount", session.getAmount());
         result.put("currency", session.getCurrency());
+        result.put("planId", requestedPlan.name());
+        result.put("billingInterval", resolvedInterval);
         return result;
     }
 
     @Override
-    public Map<String, Object> verifyCheckoutSession(String reference, String planId, String actor) {
+    public Map<String, Object> verifyCheckoutSession(String reference, String planId, String billingInterval, String actor) {
         Tenant tenant = requireTenant();
         TenantPlan requestedPlan = parseCheckoutPlan(planId);
         BillingCheckoutSession session = checkoutSessionRepository.findByReferenceAndTenant_Id(reference, tenant.getId())
                 .orElseThrow(() -> new IllegalArgumentException("Checkout session not found for this reference."));
+        String requestedInterval = resolveIntervalForPlan(requestedPlan, billingInterval);
 
         if (session.getStatus() == BillingCheckoutStatus.COMPLETED) {
             BillingSubscription current = prepareBillingState(tenant);
@@ -186,7 +194,11 @@ public class BillingServiceImpl implements BillingService {
 
         JsonNode paymentData = paystackClient.verifyTransaction(reference);
         TenantPlan resolvedPlan = session.getPlan() != null ? session.getPlan() : requestedPlan;
-        return finalizeSuccessfulCheckout(tenant, session, resolvedPlan, paymentData, actor);
+        String resolvedInterval = resolveIntervalForPlan(
+                resolvedPlan,
+                firstNonBlank(session.getBillingInterval(), requestedInterval)
+        );
+        return finalizeSuccessfulCheckout(tenant, session, resolvedPlan, resolvedInterval, paymentData, actor);
     }
 
     @Override
@@ -208,7 +220,7 @@ public class BillingServiceImpl implements BillingService {
         subscription.setStatus(BillingSubscriptionStatus.CANCELED);
         subscription.setCancelAtPeriodEnd(true);
         if (subscription.getNextBillingDate() == null && tenant.getPlan() == TenantPlan.PRO) {
-            subscription.setNextBillingDate(LocalDate.now().plusDays(30));
+            subscription.setNextBillingDate(nextBillingDateForPlan(tenant.getPlan(), subscription.getBillingInterval()));
         }
         subscription.setUpdatedBy(actor);
         subscription = subscriptionRepository.save(subscription);
@@ -233,7 +245,7 @@ public class BillingServiceImpl implements BillingService {
                     subscription.getProviderSubscriptionToken()
             );
         }
-        applyPlanState(subscription, TenantPlan.FREE);
+        applyPlanState(subscription, TenantPlan.FREE, subscription.getBillingInterval());
         subscription.setUpdatedBy(actor);
         subscription = subscriptionRepository.save(subscription);
 
@@ -347,7 +359,7 @@ public class BillingServiceImpl implements BillingService {
     private BillingSubscription initializeSubscription(Tenant tenant) {
         BillingSubscription subscription = new BillingSubscription();
         subscription.setTenant(tenant);
-        applyPlanState(subscription, tenant.getPlan());
+        applyPlanState(subscription, tenant.getPlan(), subscription.getBillingInterval());
         if (tenant.getPlan() == TenantPlan.PRO) {
             subscription.setSubscriptionReference(generateReference("SUB", tenant.getId()));
         }
@@ -359,7 +371,7 @@ public class BillingServiceImpl implements BillingService {
         if (subscription.getPlan() == plan) {
             return false;
         }
-        applyPlanState(subscription, plan);
+        applyPlanState(subscription, plan, subscription.getBillingInterval());
         if (plan == TenantPlan.PRO && !hasText(subscription.getSubscriptionReference())) {
             subscription.setSubscriptionReference(generateReference("SUB", tenant.getId()));
         }
@@ -382,30 +394,31 @@ public class BillingServiceImpl implements BillingService {
 
         if (Boolean.TRUE.equals(subscription.getCancelAtPeriodEnd())) {
             tenant.setPlan(TenantPlan.FREE);
-            applyPlanState(subscription, TenantPlan.FREE);
+            applyPlanState(subscription, TenantPlan.FREE, subscription.getBillingInterval());
             return true;
         }
 
         createInvoice(
                 tenant,
                 subscription,
-                "PRO subscription renewal",
-                amountForPlan(TenantPlan.PRO),
+                describeSubscriptionCharge(TenantPlan.PRO, subscription.getBillingInterval(), "renewal"),
+                amountForPlan(TenantPlan.PRO, subscription.getBillingInterval()),
                 currencyForPlan(TenantPlan.PRO),
                 generateReference("INV", tenant.getId()),
                 "SYSTEM"
         );
         subscription.setStatus(BillingSubscriptionStatus.ACTIVE);
-        subscription.setNextBillingDate(LocalDate.now().plusDays(30));
+        subscription.setNextBillingDate(nextBillingDateForPlan(TenantPlan.PRO, subscription.getBillingInterval()));
         subscription.setUpdatedBy("SYSTEM");
         return true;
     }
 
-    private void applyPlanState(BillingSubscription subscription, TenantPlan plan) {
+    private void applyPlanState(BillingSubscription subscription, TenantPlan plan, String requestedInterval) {
+        String resolvedInterval = resolveIntervalForPlan(plan, requestedInterval);
         subscription.setPlan(plan);
-        subscription.setAmount(amountForPlan(plan));
+        subscription.setAmount(amountForPlan(plan, resolvedInterval));
         subscription.setCurrency(currencyForPlan(plan));
-        subscription.setBillingInterval(intervalForPlan(plan));
+        subscription.setBillingInterval(resolvedInterval);
 
         if (plan == TenantPlan.FREE) {
             subscription.setStatus(BillingSubscriptionStatus.ACTIVE);
@@ -423,7 +436,7 @@ public class BillingServiceImpl implements BillingService {
         subscription.setProvider(PROVIDER_NAME);
         subscription.setCancelAtPeriodEnd(false);
         if (plan == TenantPlan.PRO && subscription.getNextBillingDate() == null) {
-            subscription.setNextBillingDate(LocalDate.now().plusDays(30));
+            subscription.setNextBillingDate(nextBillingDateForPlan(plan, resolvedInterval));
         }
         if (plan == TenantPlan.ENTERPRISE) {
             subscription.setNextBillingDate(null);
@@ -496,6 +509,7 @@ public class BillingServiceImpl implements BillingService {
             Tenant tenant,
             BillingCheckoutSession session,
             TenantPlan resolvedPlan,
+            String billingInterval,
             JsonNode paymentData,
             String actor
     ) {
@@ -507,7 +521,7 @@ public class BillingServiceImpl implements BillingService {
         BigDecimal paidAmount = amountFromKobo(paymentData.path("amount"));
         BigDecimal expectedAmount = Optional.ofNullable(session.getAmount())
                 .filter(amount -> amount.compareTo(BigDecimal.ZERO) > 0)
-                .orElseGet(() -> checkoutAmountForPlan(resolvedPlan));
+                .orElseGet(() -> checkoutAmountForPlan(resolvedPlan, billingInterval));
         if (expectedAmount.compareTo(BigDecimal.ZERO) > 0 && paidAmount.compareTo(expectedAmount) < 0) {
             throw new IllegalArgumentException("Verified payment amount is lower than the selected plan amount.");
         }
@@ -518,8 +532,8 @@ public class BillingServiceImpl implements BillingService {
 
         BillingSubscription subscription = subscriptionRepository.findByTenant_Id(tenant.getId())
                 .orElseGet(() -> initializeSubscription(tenant));
-        applyPlanState(subscription, resolvedPlan);
-        updateSubscriptionFromPaymentData(subscription, resolvedPlan, paymentData, actor);
+        applyPlanState(subscription, resolvedPlan, billingInterval);
+        updateSubscriptionFromPaymentData(subscription, resolvedPlan, billingInterval, paymentData, actor);
         subscription = subscriptionRepository.save(subscription);
 
         String reference = text(paymentData, "reference");
@@ -529,7 +543,7 @@ public class BillingServiceImpl implements BillingService {
             invoice = createInvoice(
                     tenant,
                     subscription,
-                    resolvedPlan.name() + " subscription payment",
+                    describeSubscriptionCharge(resolvedPlan, billingInterval, "payment"),
                     paidAmount.compareTo(BigDecimal.ZERO) > 0 ? paidAmount : expectedAmount,
                     firstNonBlank(text(paymentData, "currency"), currencyForPlan(resolvedPlan)),
                     reference,
@@ -538,6 +552,7 @@ public class BillingServiceImpl implements BillingService {
         }
 
         session.setStatus(BillingCheckoutStatus.COMPLETED);
+        session.setBillingInterval(resolveIntervalForPlan(resolvedPlan, billingInterval));
         session.setVerifiedAt(LocalDateTime.now());
         session.setUpdatedBy(actor);
         checkoutSessionRepository.save(session);
@@ -551,13 +566,16 @@ public class BillingServiceImpl implements BillingService {
     private void updateSubscriptionFromPaymentData(
             BillingSubscription subscription,
             TenantPlan plan,
+            String billingInterval,
             JsonNode paymentData,
             String actor
     ) {
+        String resolvedInterval = resolveIntervalForPlan(plan, billingInterval);
         subscription.setStatus(BillingSubscriptionStatus.ACTIVE);
         subscription.setProvider(PROVIDER_NAME);
         subscription.setCancelAtPeriodEnd(false);
-        subscription.setNextBillingDate(plan == TenantPlan.PRO ? LocalDate.now().plusDays(30) : null);
+        subscription.setBillingInterval(resolvedInterval);
+        subscription.setNextBillingDate(nextBillingDateForPlan(plan, resolvedInterval));
         subscription.setUpdatedBy(actor);
         BigDecimal paidAmount = amountFromKobo(paymentData.path("amount"));
         if (paidAmount.compareTo(BigDecimal.ZERO) > 0) {
@@ -573,7 +591,7 @@ public class BillingServiceImpl implements BillingService {
         String providerPlanCode = firstNonBlank(
                 text(planObject, "plan_code"),
                 text(paymentData, "plan"),
-                resolveProviderPlanCode(plan)
+                resolveProviderPlanCode(plan, resolvedInterval)
         );
 
         subscription.setProviderCustomerCode(blankToNull(customerCode));
@@ -638,6 +656,10 @@ public class BillingServiceImpl implements BillingService {
                     session.getTenant(),
                     session,
                     Optional.ofNullable(session.getPlan()).orElse(TenantPlan.PRO),
+                    resolveIntervalForPlan(
+                            Optional.ofNullable(session.getPlan()).orElse(TenantPlan.PRO),
+                            session.getBillingInterval()
+                    ),
                     data,
                     "PAYSTACK_WEBHOOK"
             );
@@ -648,7 +670,13 @@ public class BillingServiceImpl implements BillingService {
             return Map.of("handled", false, "event", "charge.success", "reference", reference);
         }
 
-        updateSubscriptionFromPaymentData(subscription, subscription.getPlan(), data, "PAYSTACK_WEBHOOK");
+        updateSubscriptionFromPaymentData(
+                subscription,
+                subscription.getPlan(),
+                subscription.getBillingInterval(),
+                data,
+                "PAYSTACK_WEBHOOK"
+        );
         subscription = subscriptionRepository.save(subscription);
 
         BillingInvoice invoice = invoiceRepository.findFirstByTenant_IdAndReferenceOrderByIdDesc(
@@ -660,7 +688,7 @@ public class BillingServiceImpl implements BillingService {
             invoice = createInvoice(
                     subscription.getTenant(),
                     subscription,
-                    subscription.getPlan().name() + " subscription renewal",
+                    describeSubscriptionCharge(subscription.getPlan(), subscription.getBillingInterval(), "renewal"),
                     amountFromKobo(data.path("amount")),
                     firstNonBlank(text(data, "currency"), subscription.getCurrency(), "NGN"),
                     reference,
@@ -773,38 +801,38 @@ public class BillingServiceImpl implements BillingService {
         }
     }
 
-    private BigDecimal amountForPlan(TenantPlan plan) {
+    private BigDecimal amountForPlan(TenantPlan plan, String billingInterval) {
         return switch (plan) {
-            case PRO -> BigDecimal.valueOf(10_000);
+            case PRO -> ANNUAL_INTERVAL.equals(resolveIntervalForPlan(plan, billingInterval))
+                    ? BigDecimal.valueOf(90_000)
+                    : BigDecimal.valueOf(10_000);
             case FREE, ENTERPRISE -> BigDecimal.ZERO;
         };
     }
 
-    private BigDecimal checkoutAmountForPlan(TenantPlan plan) {
-        return switch (plan) {
-            // The first month is temporarily discounted, while renewals continue on the
-            // regular Paystack recurring plan configured for PRO.
-            case PRO -> BigDecimal.valueOf(7_000);
-            case FREE, ENTERPRISE -> BigDecimal.ZERO;
-        };
+    private BigDecimal checkoutAmountForPlan(TenantPlan plan, String billingInterval) {
+        return amountForPlan(plan, billingInterval);
     }
 
     private String currencyForPlan(TenantPlan plan) {
         return "NGN";
     }
 
-    private String intervalForPlan(TenantPlan plan) {
+    private String intervalForPlan(TenantPlan plan, String requestedInterval) {
         return switch (plan) {
-            case PRO, FREE -> "MONTHLY";
-            case ENTERPRISE -> "CONTRACT";
+            case PRO -> normalizeBillingInterval(requestedInterval, MONTHLY_INTERVAL);
+            case FREE -> MONTHLY_INTERVAL;
+            case ENTERPRISE -> CONTRACT_INTERVAL;
         };
     }
 
-    private String resolveProviderPlanCode(TenantPlan plan) {
+    private String resolveProviderPlanCode(TenantPlan plan, String billingInterval) {
         if (plan != TenantPlan.PRO) {
             return "";
         }
-        return paystackClient.getProMonthlyPlanCode();
+        return ANNUAL_INTERVAL.equals(resolveIntervalForPlan(plan, billingInterval))
+                ? paystackClient.getProAnnualPlanCode()
+                : paystackClient.getProMonthlyPlanCode();
     }
 
     private int toKobo(BigDecimal amount) {
@@ -823,15 +851,57 @@ public class BillingServiceImpl implements BillingService {
         return kobo.divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
     }
 
-    private String buildCheckoutUrl(String successUrl, String reference, TenantPlan plan) {
+    private String buildCheckoutUrl(String successUrl, String reference, TenantPlan plan, String billingInterval) {
         String base = hasText(successUrl) ? successUrl.trim() : "/billing";
         return UriComponentsBuilder.fromUriString(base)
                 .queryParam("paymentStatus", "success")
                 .queryParam("reference", reference)
                 .queryParam("plan", plan.name())
+                .queryParam("interval", resolveIntervalForPlan(plan, billingInterval))
                 .queryParam("provider", PROVIDER_NAME)
                 .build(true)
                 .toUriString();
+    }
+
+    private String resolveIntervalForPlan(TenantPlan plan, String requestedInterval) {
+        return intervalForPlan(plan, requestedInterval);
+    }
+
+    private String normalizeBillingInterval(String billingInterval, String fallback) {
+        String normalized = StringUtils.hasText(billingInterval)
+                ? billingInterval.trim().toUpperCase(Locale.ROOT)
+                : fallback;
+
+        if ("YEARLY".equals(normalized)) {
+            normalized = ANNUAL_INTERVAL;
+        }
+
+        return switch (normalized) {
+            case MONTHLY_INTERVAL, ANNUAL_INTERVAL, CONTRACT_INTERVAL -> normalized;
+            default -> fallback;
+        };
+    }
+
+    private LocalDate nextBillingDateForPlan(TenantPlan plan, String billingInterval) {
+        if (plan != TenantPlan.PRO) {
+            return null;
+        }
+
+        String resolvedInterval = resolveIntervalForPlan(plan, billingInterval);
+        return ANNUAL_INTERVAL.equals(resolvedInterval)
+                ? LocalDate.now().plusYears(1)
+                : LocalDate.now().plusMonths(1);
+    }
+
+    private String describeSubscriptionCharge(TenantPlan plan, String billingInterval, String suffix) {
+        if (plan != TenantPlan.PRO) {
+            return plan.name() + " subscription " + suffix;
+        }
+
+        String intervalLabel = ANNUAL_INTERVAL.equals(resolveIntervalForPlan(plan, billingInterval))
+                ? "annual"
+                : "monthly";
+        return "PRO " + intervalLabel + " subscription " + suffix;
     }
 
     private String buildPortalUrl(String returnUrl) {

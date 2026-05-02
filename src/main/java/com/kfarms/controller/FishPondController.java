@@ -2,6 +2,7 @@ package com.kfarms.controller;
 
 import com.kfarms.dto.FishPondRequestDto;
 import com.kfarms.dto.FishPondResponseDto;
+import com.kfarms.dto.MortalityRecordRequestDto;
 import com.kfarms.dto.StockAdjustmentRequestDto;
 import com.kfarms.entity.ApiResponse;
 import com.kfarms.service.FishPondService;
@@ -165,6 +166,20 @@ public class FishPondController {
 
         return ResponseEntity.ok(
                 new ApiResponse<>(true, "Stock adjusted successfully", response)
+        );
+    }
+
+    @PostMapping("/{id}/mortality")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
+    public ResponseEntity<ApiResponse<FishPondResponseDto>> recordMortality(
+            @PathVariable Long id,
+            @Valid @RequestBody MortalityRecordRequestDto request
+    ) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String updatedBy = auth != null ? auth.getName() : "SYSTEM";
+        FishPondResponseDto response = service.recordMortality(id, request, updatedBy);
+        return ResponseEntity.ok(
+                new ApiResponse<>(true, "Fish mortality recorded successfully", response)
         );
     }
 }

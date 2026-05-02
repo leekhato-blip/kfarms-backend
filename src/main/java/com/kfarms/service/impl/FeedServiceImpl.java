@@ -15,6 +15,7 @@ import com.kfarms.service.InventoryService;
 import com.kfarms.tenant.entity.Tenant;
 import com.kfarms.tenant.repository.TenantRepository;
 import com.kfarms.tenant.service.TenantContext;
+import com.kfarms.tenant.service.TenantRecordAuditService;
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -36,6 +37,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -61,6 +63,7 @@ public class FeedServiceImpl implements FeedService {
     private final InventoryRepository inventoryRepo;
     private final InventoryService inventoryService;
     private final TenantRepository tenantRepository;
+    private final TenantRecordAuditService tenantRecordAuditService;
 
     @Override
     @Transactional
@@ -72,6 +75,15 @@ public class FeedServiceImpl implements FeedService {
         applyRequest(entity, request);
 
         Feed saved = repo.save(entity);
+        tenantRecordAuditService.created(
+                tenantId,
+                entity.getCreatedBy(),
+                "FEED",
+                saved.getId(),
+                feedTargetName(saved),
+                feedSummary(saved),
+                "Created feed record for " + feedTargetName(saved) + "."
+        );
         consumeInventoryIfTracked(saved, saved.getQuantityUsed(), "Feed logged");
         return FeedMapper.toResponseDto(saved);
     }
@@ -138,12 +150,23 @@ public class FeedServiceImpl implements FeedService {
     public FeedResponseDto update(Long id, FeedRequestDto request, String updatedBy) {
         Feed entity = getTenantFeed(id, false);
         FeedSnapshot previous = FeedSnapshot.from(entity);
+        String previousSummary = feedSummary(entity);
 
         applyRequest(entity, request);
         entity.setUpdatedBy(updatedBy);
 
         reconcileInventory(previous, entity);
         Feed saved = repo.save(entity);
+        tenantRecordAuditService.updated(
+                requireTenantId(),
+                updatedBy,
+                "FEED",
+                saved.getId(),
+                feedTargetName(saved),
+                previousSummary,
+                feedSummary(saved),
+                "Updated feed record for " + feedTargetName(saved) + "."
+        );
         return FeedMapper.toResponseDto(saved);
     }
 
@@ -151,6 +174,7 @@ public class FeedServiceImpl implements FeedService {
     @Transactional
     public void delete(Long id, String deletedBy) {
         Feed entity = getTenantFeed(id, true);
+        String previousSummary = feedSummary(entity);
         if (Boolean.TRUE.equals(entity.getDeleted())) {
             throw new IllegalArgumentException("Feed record with ID " + id + " has already been deleted");
         }
@@ -160,6 +184,15 @@ public class FeedServiceImpl implements FeedService {
         entity.setDeletedAt(LocalDateTime.now());
         entity.setUpdatedBy(deletedBy);
         repo.save(entity);
+        tenantRecordAuditService.deleted(
+                requireTenantId(),
+                deletedBy,
+                "FEED",
+                entity.getId(),
+                feedTargetName(entity),
+                previousSummary,
+                "Deleted feed record for " + feedTargetName(entity) + "."
+        );
     }
 
     @Override
@@ -554,6 +587,23 @@ public class FeedServiceImpl implements FeedService {
             return feed.getFeedName().trim();
         }
         return inferFeedName(feed.getBatchType());
+    }
+
+    private String feedTargetName(Feed feed) {
+        return resolveFeedDisplayName(feed);
+    }
+
+    private String feedSummary(Feed feed) {
+        if (feed == null) {
+            return "";
+        }
+        return String.format(
+                "%s • Qty %s • Unit cost %s • Date %s",
+                feedTargetName(feed),
+                safeQuantity(feed.getQuantityUsed()),
+                feed.getUnitCost() != null ? feed.getUnitCost().toPlainString() : "0",
+                Optional.ofNullable(feed.getDate()).map(LocalDate::toString).orElse("N/A")
+        );
     }
 
     private String inferFeedName(FeedBatchType batchType) {

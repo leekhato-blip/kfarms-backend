@@ -11,4 +11,6 @@ public class BillingVerifyCheckoutRequestDto {
 
     @NotBlank(message = "Plan ID is required")
     private String planId;
+
+    private String billingInterval;
 }

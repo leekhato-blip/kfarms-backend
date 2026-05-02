@@ -14,6 +14,7 @@ import com.kfarms.tenant.entity.Tenant;
 import com.kfarms.tenant.repository.TenantRepository;
 import com.kfarms.service.NotificationService;
 import com.kfarms.tenant.service.TenantContext;
+import com.kfarms.tenant.service.TenantRecordAuditService;
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -36,6 +37,7 @@ public class InventoryServiceImpl implements InventoryService {
     private final NotificationService notification;
     private final NotificationRepository notificationRepo;
     private final TenantRepository tenantRepository;
+    private final TenantRecordAuditService tenantRecordAuditService;
 
     @Override
     public InventoryResponseDto create(InventoryRequestDto dto) {
@@ -58,6 +60,15 @@ public class InventoryServiceImpl implements InventoryService {
             entity.setDeletedAt(null);
         }
         Inventory saved = repo.save(entity);
+        tenantRecordAuditService.created(
+                tenantId,
+                entity.getCreatedBy(),
+                "INVENTORY",
+                saved.getId(),
+                inventoryTargetName(saved),
+                inventorySummary(saved),
+                "Created inventory record for " + inventoryTargetName(saved) + "."
+        );
         return InventoryMapper.toResponseDto(saved);
     }
 
@@ -150,6 +161,7 @@ public class InventoryServiceImpl implements InventoryService {
         Inventory entity = repo.findByIdAndTenant_Id(id, tenantId)
                 .filter(i -> !Boolean.TRUE.equals(i.getDeleted()))
                 .orElseThrow(() -> new ResourceNotFoundException("Inventory", "id", id));
+        String previousSummary = inventorySummary(entity);
 
         String canonicalName = normalizeName(request.getItemName());
         InventoryCategory category = parseCategory(request.getCategory());
@@ -166,6 +178,16 @@ public class InventoryServiceImpl implements InventoryService {
         entity.setUpdatedAt(LocalDateTime.now());
 
         repo.save(entity);
+        tenantRecordAuditService.updated(
+                tenantId,
+                updateBy,
+                "INVENTORY",
+                entity.getId(),
+                inventoryTargetName(entity),
+                previousSummary,
+                inventorySummary(entity),
+                "Updated inventory record for " + inventoryTargetName(entity) + "."
+        );
         return InventoryMapper.toResponseDto(entity);
     }
 
@@ -175,6 +197,7 @@ public class InventoryServiceImpl implements InventoryService {
         Inventory entity = repo.findByIdAndTenant_Id(id, tenantId)
                 .filter(i -> !Boolean.TRUE.equals(i.getDeleted()))
                 .orElseThrow(() -> new ResourceNotFoundException("Inventory", "id", id));
+        String previousSummary = inventorySummary(entity);
 
         if (Boolean.TRUE.equals(entity.getDeleted())) {
             throw new IllegalArgumentException("Inventory with ID: " + id + " soft deleted successfully");
@@ -184,6 +207,15 @@ public class InventoryServiceImpl implements InventoryService {
         entity.setDeletedAt(LocalDateTime.now());
         entity.setUpdatedBy(deletedBy);
         repo.save(entity);
+        tenantRecordAuditService.deleted(
+                tenantId,
+                deletedBy,
+                "INVENTORY",
+                entity.getId(),
+                inventoryTargetName(entity),
+                previousSummary,
+                "Deleted inventory record for " + inventoryTargetName(entity) + "."
+        );
     }
 
     @Override
@@ -301,6 +333,7 @@ public class InventoryServiceImpl implements InventoryService {
         Inventory inventory = repo.findByIdAndTenant_Id(id, tenantId)
                 .filter(i -> !Boolean.TRUE.equals(i.getDeleted()))
                 .orElseThrow(() -> new ResourceNotFoundException("Inventory", "id", id));
+        String previousSummary = inventorySummary(inventory);
 
         int currentQty = inventory.getQuantity() != null ? inventory.getQuantity() : 0;
         int newQuantity = currentQty + quantityChange;
@@ -318,6 +351,16 @@ public class InventoryServiceImpl implements InventoryService {
 
         Inventory saved = repo.save(inventory);
         maybeCreateLowStockNotification(saved, tenantId);
+        tenantRecordAuditService.updated(
+                tenantId,
+                updatedBy,
+                "INVENTORY",
+                saved.getId(),
+                inventoryTargetName(saved),
+                previousSummary,
+                inventorySummary(saved),
+                "Adjusted inventory stock for " + inventoryTargetName(saved) + "."
+        );
         return InventoryMapper.toResponseDto(saved);
     }
 
@@ -481,5 +524,24 @@ public class InventoryServiceImpl implements InventoryService {
         return inventory != null
                 && inventory.getTenant() != null
                 && Objects.equals(inventory.getTenant().getId(), tenantId);
+    }
+
+    private String inventoryTargetName(Inventory inventory) {
+        String itemName = inventory != null ? inventory.getItemName() : null;
+        return itemName != null && !itemName.isBlank() ? itemName.trim() : "Inventory record";
+    }
+
+    private String inventorySummary(Inventory inventory) {
+        if (inventory == null) {
+            return "";
+        }
+        return String.format(
+                "%s • Qty %s %s • Category %s • Unit cost %s",
+                inventoryTargetName(inventory),
+                Optional.ofNullable(inventory.getQuantity()).orElse(0),
+                Optional.ofNullable(inventory.getUnit()).orElse("units"),
+                inventory.getCategory() != null ? inventory.getCategory().name() : "UNKNOWN",
+                inventory.getUnitCost() != null ? inventory.getUnitCost().toPlainString() : "0"
+        );
     }
 }

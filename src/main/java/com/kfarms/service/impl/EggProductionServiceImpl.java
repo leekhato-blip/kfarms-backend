@@ -12,6 +12,7 @@ import com.kfarms.service.EggProductionService;
 import com.kfarms.tenant.entity.Tenant;
 import com.kfarms.tenant.repository.TenantRepository;
 import com.kfarms.tenant.service.TenantContext;
+import com.kfarms.tenant.service.TenantRecordAuditService;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.JoinType;
@@ -33,6 +34,7 @@ public class EggProductionServiceImpl implements EggProductionService {
     private final EggProductionRepo repo;
     private final LivestockRepository livestockRepo;
     private final TenantRepository tenantRepo;
+    private final TenantRecordAuditService tenantRecordAuditService;
 
     // CREATE
     @Override
@@ -50,6 +52,15 @@ public class EggProductionServiceImpl implements EggProductionService {
         entity.setTenant(tenant);
         entity.setNote(trimToNull(request.getNote()));
         repo.save(entity);
+        tenantRecordAuditService.created(
+                tenantId,
+                entity.getCreatedBy(),
+                "EGG_PRODUCTION",
+                entity.getId(),
+                eggTargetName(entity),
+                eggSummary(entity),
+                "Created egg production record for " + eggTargetName(entity) + "."
+        );
 
         return EggProductionMapper.toResponseDto(entity);
     }
@@ -124,6 +135,7 @@ public class EggProductionServiceImpl implements EggProductionService {
                 .filter(e -> !Boolean.TRUE.equals(e.getDeleted()))
                 .orElseThrow(() -> new ResourceNotFoundException("Egg", "id", id));
         attachTenantIfMissing(entity, tenantId);
+        String previousSummary = eggSummary(entity);
 
         if (request.getBatchId() != null) {
             Livestock livestock = livestockRepo.findByIdAndTenantId(request.getBatchId(), tenantId)
@@ -140,6 +152,16 @@ public class EggProductionServiceImpl implements EggProductionService {
 
         entity.setUpdatedBy(updatedBy);
         repo.save(entity);
+        tenantRecordAuditService.updated(
+                tenantId,
+                updatedBy,
+                "EGG_PRODUCTION",
+                entity.getId(),
+                eggTargetName(entity),
+                previousSummary,
+                eggSummary(entity),
+                "Updated egg production record for " + eggTargetName(entity) + "."
+        );
         return EggProductionMapper.toResponseDto(entity);
     }
 
@@ -150,6 +172,7 @@ public class EggProductionServiceImpl implements EggProductionService {
         EggProduction entity = repo.findVisibleByIdAndTenantId(id, tenantId)
                         .orElseThrow(() -> new ResourceNotFoundException("EggProduction", "id", id));
         attachTenantIfMissing(entity, tenantId);
+        String previousSummary = eggSummary(entity);
 
         if (Boolean.TRUE.equals(entity.getDeleted())) {
             throw new IllegalArgumentException("Egg Record with ID " + id + " has already been deleted");
@@ -158,6 +181,15 @@ public class EggProductionServiceImpl implements EggProductionService {
         entity.setDeletedAt(LocalDateTime.now());
         entity.setUpdatedBy(deletedBy);
         repo.save(entity);
+        tenantRecordAuditService.deleted(
+                tenantId,
+                deletedBy,
+                "EGG_PRODUCTION",
+                entity.getId(),
+                eggTargetName(entity),
+                previousSummary,
+                "Deleted egg production record for " + eggTargetName(entity) + "."
+        );
     }
 
     @Override
@@ -322,5 +354,25 @@ public class EggProductionServiceImpl implements EggProductionService {
         Tenant tenant = tenantRepo.findById(tenantId)
                 .orElseThrow(() -> new ResourceNotFoundException("Tenant", "id", tenantId));
         entity.setTenant(tenant);
+    }
+
+    private String eggTargetName(EggProduction entity) {
+        if (entity == null || entity.getLivestock() == null) {
+            return "Egg production record";
+        }
+        String batchName = entity.getLivestock().getBatchName();
+        return batchName != null && !batchName.isBlank() ? batchName.trim() : "Egg production record";
+    }
+
+    private String eggSummary(EggProduction entity) {
+        if (entity == null) {
+            return "";
+        }
+        return String.format(
+                "Good %s • Damaged %s • Date %s",
+                entity.getGoodEggs(),
+                entity.getDamagedEggs(),
+                Optional.ofNullable(entity.getCollectionDate()).map(LocalDate::toString).orElse("N/A")
+        );
     }
 }

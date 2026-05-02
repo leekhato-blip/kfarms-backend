@@ -321,8 +321,8 @@ public class TenantAdminController {
         Tenant tenant = requireCurrentTenant();
         planGuardService.requirePlanAccess(
                 tenant,
-                TenantPlan.ENTERPRISE,
-                "Audit log access is available on the Enterprise plan."
+                TenantPlan.PRO,
+                "Audit log access is available on Pro and Enterprise plans."
         );
         tenantPermissionService.requirePermission(
                 auth,

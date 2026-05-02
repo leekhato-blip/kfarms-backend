@@ -2,6 +2,7 @@ package com.kfarms.service;
 
 import com.kfarms.dto.FishPondRequestDto;
 import com.kfarms.dto.FishPondResponseDto;
+import com.kfarms.dto.MortalityRecordRequestDto;
 import com.kfarms.dto.StockAdjustmentRequestDto;
 
 import java.time.LocalDate;
@@ -17,4 +18,5 @@ public interface FishPondService {
     void restore(Long id);
     Map<String, Object> getSummary();
     FishPondResponseDto adjustStock(Long id, StockAdjustmentRequestDto request, String updatedBy);
+    FishPondResponseDto recordMortality(Long id, MortalityRecordRequestDto request, String updatedBy);
 }

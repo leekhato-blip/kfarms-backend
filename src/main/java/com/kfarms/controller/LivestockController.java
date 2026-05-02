@@ -3,6 +3,7 @@ package com.kfarms.controller;
 
 import com.kfarms.dto.LivestockRequestDto;
 import com.kfarms.dto.LivestockResponseDto;
+import com.kfarms.dto.MortalityRecordRequestDto;
 import com.kfarms.dto.StockAdjustmentRequestDto;
 import com.kfarms.entity.ApiResponse;
 import com.kfarms.service.LivestockService;
@@ -177,6 +178,20 @@ public class LivestockController {
         LivestockResponseDto response = service.adjustStock(id, request, updatedBy);
         return ResponseEntity.ok(
                 new ApiResponse<>(true, "Stock adjusted successfully", response)
+        );
+    }
+
+    @PostMapping("/{id}/mortality")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
+    public ResponseEntity<ApiResponse<LivestockResponseDto>> recordMortality(
+            @PathVariable Long id,
+            @Valid @RequestBody MortalityRecordRequestDto request
+    ) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String updatedBy = auth != null ? auth.getName() : "SYSTEM";
+        LivestockResponseDto response = service.recordMortality(id, request, updatedBy);
+        return ResponseEntity.ok(
+                new ApiResponse<>(true, "Livestock mortality recorded successfully", response)
         );
     }
 }

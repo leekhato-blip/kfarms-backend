@@ -44,6 +44,9 @@ public class BillingCheckoutSession extends Auditable {
     @Column(nullable = false, length = 3)
     private String currency = "NGN";
 
+    @Column(name = "billing_interval", nullable = false, length = 20)
+    private String billingInterval = "MONTHLY";
+
     @Column(length = 160)
     private String customerEmail;
 

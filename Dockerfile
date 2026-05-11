@@ -18,7 +18,7 @@ RUN apk add --no-cache wget
 COPY --from=build /app/target/kfarms-backend-0.0.1-SNAPSHOT.jar /app/kfarms-backend.jar
 
 ENV SPRING_PROFILES_ACTIVE=prod
-ENV JAVA_OPTS="-XX:+UseSerialGC -Xshare:off"
+ENV JAVA_OPTS="-XX:TieredStopAtLevel=1 -XX:+UseSerialGC -Xshare:off"
 
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --retries=5 CMD wget -q -O /dev/null http://127.0.0.1:${PORT:-8080}/actuator/health || exit 1
